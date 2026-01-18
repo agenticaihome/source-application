@@ -28,6 +28,7 @@ Profile creation and basic information display.
 **Props:**
 - `profile: ReputationProof | null` - Current user's profile
 - `explorerUri: string` - Ergo Explorer API endpoint
+- `source_explorer_url: string` - Base URL for the source explorer (used for deep links)
 - `onProfileCreated?: (txId: string) => void` - Callback when profile is created
 
 **Usage:**
@@ -37,11 +38,13 @@ Profile creation and basic information display.
   
   let profile = null;
   let explorerUri = "https://api.ergoplatform.com";
+  let source_explorer_url = "https://source-explorer.io";
 </script>
 
 <ProfileCard 
   {profile}
   {explorerUri}
+  {source_explorer_url}
   onProfileCreated={(tx) => console.log('Profile created:', tx)}
 />
 ```
@@ -55,6 +58,7 @@ Form for adding new file sources to the network. It supports two modes: a "free"
 **Props:**
 - `profile: ReputationProof | null` - Current user's profile (required to enable adding).
 - `explorerUri: string` - Ergo Explorer API endpoint.
+- `source_explorer_url: string` - Base URL for the source explorer (used for deep links).
 - `hash?: Writable<string>` - Optional. A Svelte writable store for the file hash.
 - `title?: string` - Optional. Custom title for the component (default: "Add New File Source").
 - `onSourceAdded?: (txId: string) => void` - Callback when source is added.
@@ -78,6 +82,7 @@ Form for adding new file sources to the network. It supports two modes: a "free"
   
   let profile = { ... }; // Load from fetchProfile
   let explorerUri = "https://api.ergoplatform.com";
+  let source_explorer_url = "https://source-explorer.io";
   
   // Fixed mode
   let fileHashStore = writable("abc123..."); 
@@ -89,6 +94,7 @@ Form for adding new file sources to the network. It supports two modes: a "free"
 <FileSourceCreation 
   {profile}
   {explorerUri}
+  {source_explorer_url}
   hash={fileHashStore}
   title="Add Download Link"
   onSourceAdded={(tx) => console.log('Source added:', tx)}
@@ -109,6 +115,7 @@ Complete file source display for a specific file hash, including tabs for source
 - `unavailableSources: CachedData<UnavailableSource[]>` - Map of unavailabilities
 - `isLoading: boolean` - Loading state
 - `explorerUri: string` - Ergo Explorer API endpoint
+- `source_explorer_url: string` - Base URL for the source explorer (used for deep links)
 - `webExplorerUriTkn: string` - Web explorer token link template
 - `class?: string` - CSS class for the container (optional)
 
@@ -120,6 +127,7 @@ Complete file source display for a specific file hash, including tabs for source
   let fileHash = "abc123...";
   let profile = null;
   let explorerUri = "https://api.ergoplatform.com";
+  let source_explorer_url = "https://source-explorer.io";
   let webExplorerUriTkn = "https://sigmaspace.io/en/token/";
 </script>
 
@@ -127,11 +135,53 @@ Complete file source display for a specific file hash, including tabs for source
   {fileHash}
   {profile}
   {explorerUri}
+  {source_explorer_url}
   {webExplorerUriTkn}
   sources={[]}
   invalidFileSources={{}}
   unavailableSources={{}}
   isLoading={false}
+/>
+```
+
+---
+
+### FileSourceCard
+
+Display a single file source with voting and editing actions.
+
+**Props:**
+- `source: FileSource` - The file source to display
+- `profile: ReputationProof | null` - The current user's profile
+- `invalidations: InvalidFileSource[]` - List of invalidations for this source
+- `unavailabilities: UnavailableSource[]` - List of unavailabilities for this source
+- `explorerUri: string` - Ergo Explorer API endpoint
+- `source_explorer_url: string` - Base URL for the source explorer (used for deep links)
+- `webExplorerUriTx: string` - Web explorer transaction link template
+- `webExplorerUriTkn: string` - Web explorer token link template
+
+**Usage:**
+```svelte
+<script>
+  import { FileSourceCard } from 'source-application';
+  
+  let source = { ... };
+  let profile = null;
+  let explorerUri = "https://api.ergoplatform.com";
+  let source_explorer_url = "https://source-explorer.io";
+  let webExplorerUriTx = "https://sigmaspace.io/en/tx/";
+  let webExplorerUriTkn = "https://sigmaspace.io/en/token/";
+</script>
+
+<FileSourceCard 
+  {source}
+  {profile}
+  {explorerUri}
+  {source_explorer_url}
+  {webExplorerUriTx}
+  {webExplorerUriTkn}
+  invalidations={[]}
+  unavailabilities={[]}
 />
 ```
 
