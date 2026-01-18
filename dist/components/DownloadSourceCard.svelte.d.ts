@@ -9,6 +9,7 @@ declare const __propDef: {
         fileHash: string;
         reputationProof?: ReputationProof | null;
         explorerUri: string;
+        source_explorer_url: string;
         currentSources?: FileSource[];
     };
     events: {

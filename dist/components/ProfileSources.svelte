@@ -12,6 +12,7 @@ export let reputationProof = null;
 export let explorerUri;
 export let webExplorerUriTkn;
 export let webExplorerUriTx;
+export let source_explorer_url;
 export let fileSources = {};
 export let invalidFileSources = {};
 export let unavailableSources = {};
@@ -268,6 +269,7 @@ $:
                         {explorerUri}
                         {webExplorerUriTx}
                         {webExplorerUriTkn}
+                        {source_explorer_url}
                     />
                 {/each}
             </div>
@@ -278,6 +280,7 @@ $:
                 events={timelineEvents}
                 title="Profile Activity History"
                 {webExplorerUriTkn}
+                {source_explorer_url}
             />
         {:else}
             <div

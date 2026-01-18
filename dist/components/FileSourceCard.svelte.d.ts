@@ -9,6 +9,7 @@ declare const __propDef: {
         unavailabilities?: UnavailableSource[];
         profile?: ReputationProof | null;
         explorerUri: string;
+        source_explorer_url: string;
         webExplorerUriTx: string;
         webExplorerUriTkn: string;
     };

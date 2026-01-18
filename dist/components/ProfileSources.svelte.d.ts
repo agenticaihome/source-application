@@ -10,6 +10,7 @@ declare const __propDef: {
         explorerUri: string;
         webExplorerUriTkn: string;
         webExplorerUriTx: string;
+        source_explorer_url: string;
         fileSources?: CachedData<FileSource[]>;
         invalidFileSources?: CachedData<InvalidFileSource[]>;
         unavailableSources?: CachedData<UnavailableSource[]>;

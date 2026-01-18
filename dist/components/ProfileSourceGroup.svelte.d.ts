@@ -7,6 +7,7 @@ declare const __propDef: {
         invalidFileSources?: CachedData<InvalidFileSource[]>;
         unavailableSources?: CachedData<UnavailableSource[]>;
         webExplorerUriTkn: string;
+        source_explorer_url: string;
     };
     events: {
         [evt: string]: CustomEvent<any>;

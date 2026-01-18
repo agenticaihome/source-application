@@ -5,6 +5,7 @@ declare const __propDef: {
         events?: TimelineEvent[];
         title?: string;
         webExplorerUriTkn?: string;
+        source_explorer_url?: string;
     };
     events: {
         [evt: string]: CustomEvent<any>;

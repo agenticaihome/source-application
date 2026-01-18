@@ -5,6 +5,7 @@ declare const __propDef: {
         profile?: ReputationProof | null;
         address?: string | null;
         explorerUri: string;
+        source_explorer_url: string;
         onProfileCreated?: ((txId: string) => void) | null;
     };
     events: {

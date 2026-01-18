@@ -5,6 +5,7 @@ import {} from "../ergo/object";
 export let profile = null;
 export let address = null;
 export let explorerUri;
+export let source_explorer_url;
 export let onProfileCreated = null;
 let isCreating = false;
 async function handleCreateProfile() {
@@ -54,11 +55,13 @@ function copyToClipboard(text) {
                                     >Profile Token ID</span
                                 >
                             </div>
-                            <p
-                                class="font-mono text-xs break-all text-foreground"
+                            <a
+                                href={`${source_explorer_url}?profile=${profile.token_id}`}
+                                target="_blank"
+                                class="font-mono text-xs break-all text-primary hover:underline"
                             >
                                 {profile.token_id}
-                            </p>
+                            </a>
                         </div>
                         <Button
                             variant="ghost"

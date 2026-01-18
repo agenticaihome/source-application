@@ -10,6 +10,7 @@ import { uint8ArrayToHex } from "../ergo/utils";
 import {} from "svelte/store";
 export let profile = null;
 export let explorerUri;
+export let source_explorer_url;
 export let onSourceAdded = null;
 export let hash = void 0;
 export let title = "Add New File Source";
@@ -155,7 +156,13 @@ async function handleAddSource() {
         {#if newFileHash}
             <div class="text-xs font-mono text-muted-foreground break-all">
                 <span class="font-semibold text-primary/70">Hash:</span>
-                {newFileHash}
+                <a
+                    href={`${source_explorer_url}?search=${newFileHash}`}
+                    target="_blank"
+                    class="hover:underline text-primary"
+                >
+                    {newFileHash}
+                </a>
             </div>
         {:else}
             <div class="text-xs text-muted-foreground italic">

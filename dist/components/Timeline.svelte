@@ -4,6 +4,7 @@ import { ExternalLink } from "lucide-svelte";
 export let events = [];
 export let title = "Opinion Timeline";
 export let webExplorerUriTkn = "";
+export let source_explorer_url = "";
 $:
   chronologicalEvents = [...events].sort(
     (a, b) => b.timestamp - a.timestamp
@@ -65,11 +66,14 @@ function getAvatarSvg(tokenId, size = 32) {
                                                 16,
                                             )}
                                         </div>
-                                        <span class="author-name"
+                                        <a
+                                            href={`${source_explorer_url}?profile=${event.authorTokenId}`}
+                                            target="_blank"
+                                            class="author-name hover:underline hover:text-primary cursor-pointer"
                                             >@{event.authorTokenId.slice(
                                                 0,
                                                 6,
-                                            )}</span
+                                            )}</a
                                         >
                                         <a
                                             href={`${webExplorerUriTkn}${event.authorTokenId}`}

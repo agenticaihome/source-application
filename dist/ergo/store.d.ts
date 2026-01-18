@@ -1,3 +1,4 @@
+import { type ReputationProof, type TypeNFT } from 'reputation-system';
 import { type FileSource, type InvalidFileSource, type UnavailableSource, type ProfileOpinion, type CachedData } from './sourceObject';
 export declare const address: import("svelte/store").Writable<string | null>;
 export declare const network: import("svelte/store").Writable<string | null>;
@@ -8,7 +9,7 @@ export declare const searchStore: import("svelte/store").Writable<string | null>
 export declare const data_store: import("svelte/store").Writable<any>;
 export declare const types: import("svelte/store").Writable<Map<string, TypeNFT>>;
 export declare const proofs: import("svelte/store").Writable<Map<string, ReputationProof>>;
-export declare const reputation_proof: import("svelte/store").Writable<any>;
+export declare const reputation_proof: import("svelte/store").Writable<ReputationProof | null>;
 export declare const explorer_uri: {
     subscribe: (this: void, run: import("svelte/store").Subscriber<string>, invalidate?: import("svelte/store").Invalidator<string> | undefined) => import("svelte/store").Unsubscriber;
     set: (value: string) => void;

@@ -25,6 +25,7 @@ export let invalidFileSources = {};
 export let unavailableSources = {};
 export let isLoading = false;
 export let explorerUri;
+export let source_explorer_url;
 export let webExplorerUriTkn;
 let className = "";
 export { className as class };
@@ -253,17 +254,24 @@ async function handleAddSource() {
                         {group}
                         {fileHash}
                         {explorerUri}
+                        {source_explorer_url}
                         userProfileTokenId={profile?.token_id ?? null}
                     />
                 {/each}
             {:else if viewMode === "profile"}
                 {#each groupedByProfile as group (group.profileTokenId)}
-                    <ProfileSourceGroup {group} {webExplorerUriTkn} />
+                    <ProfileSourceGroup
+                        {group}
+                        {webExplorerUriTkn}
+                        {source_explorer_url}
+                    />
                 {/each}
             {:else if viewMode === "timeline"}
                 <Timeline
                     events={timelineEvents}
                     title="File Source Opinion History"
+                    {webExplorerUriTkn}
+                    {source_explorer_url}
                 />
             {/if}
         </div>

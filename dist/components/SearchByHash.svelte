@@ -17,6 +17,7 @@ export let hasProfile = false;
 export let reputationProof = null;
 export let explorerUri;
 export let webExplorerUriTkn;
+export let source_explorer_url;
 export let fileSources = {};
 export let invalidFileSources = {};
 export let unavailableSources = {};
@@ -206,6 +207,7 @@ $:
                         : null}
                     {reputationProof}
                     {explorerUri}
+                    {source_explorer_url}
                     currentSources={sources}
                 />
             {/each}
@@ -216,6 +218,7 @@ $:
                     {invalidFileSources}
                     {unavailableSources}
                     {webExplorerUriTkn}
+                    {source_explorer_url}
                 />
             {/each}
         {:else if viewMode === "timeline"}
@@ -223,6 +226,7 @@ $:
                 events={timelineEvents}
                 title="File Source Opinion History"
                 {webExplorerUriTkn}
+                {source_explorer_url}
             />
         {/if}
     </div>

@@ -7,6 +7,7 @@ export let group;
 export let invalidFileSources = {};
 export let unavailableSources = {};
 export let webExplorerUriTkn;
+export let source_explorer_url;
 function getAvatarSvg(tokenId, size = 48) {
   return jdenticon.toSvg(tokenId, size);
 }
@@ -28,9 +29,13 @@ function getUnavailabilities(sourceUrl) {
         <div class="flex-1 min-w-0">
             <!-- Profile Header -->
             <div class="flex items-center gap-2 mb-3">
-                <span class="text-sm font-medium text-primary">
+                <a
+                    href={`${source_explorer_url}?profile=${group.profileTokenId}`}
+                    target="_blank"
+                    class="text-sm font-medium text-primary hover:underline"
+                >
                     @{group.profileTokenId.slice(0, 8)}...
-                </span>
+                </a>
                 <a
                     href={`${webExplorerUriTkn}${group.profileTokenId}`}
                     target="_blank"

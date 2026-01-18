@@ -8,6 +8,7 @@ declare const __propDef: {
         reputationProof?: ReputationProof | null;
         explorerUri: string;
         webExplorerUriTkn: string;
+        source_explorer_url: string;
         fileSources?: CachedData<FileSource[]>;
         invalidFileSources?: CachedData<InvalidFileSource[]>;
         unavailableSources?: CachedData<UnavailableSource[]>;

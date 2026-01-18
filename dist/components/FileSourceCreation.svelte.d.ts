@@ -5,6 +5,7 @@ declare const __propDef: {
     props: {
         profile?: ReputationProof | null;
         explorerUri: string;
+        source_explorer_url: string;
         onSourceAdded?: ((txId: string) => void) | null;
         hash?: Writable<string> | undefined;
         title?: string;

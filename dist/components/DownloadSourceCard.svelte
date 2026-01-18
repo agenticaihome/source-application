@@ -12,8 +12,6 @@ import {
   CloudOff
 } from "lucide-svelte";
 import * as jdenticon from "jdenticon";
-import { page } from "$app/stores";
-import { goto } from "$app/navigation";
 import {} from "../ergo/object";
 import {} from "../ergo/sourceObject";
 export let group;
@@ -21,6 +19,7 @@ export let userProfileTokenId = null;
 export let fileHash;
 export let reputationProof = null;
 export let explorerUri;
+export let source_explorer_url;
 export let currentSources = [];
 let isVoting = false;
 let voteError = null;
@@ -90,13 +89,6 @@ async function handleUnavailable() {
     isVoting = false;
   }
 }
-function navigateToProfile(tokenId) {
-  const url = new URL($page.url);
-  url.searchParams.set("profile", tokenId);
-  url.searchParams.set("tab", "profile");
-  url.searchParams.delete("search");
-  goto(url.toString(), { keepFocus: true, noScroll: true });
-}
 </script>
 
 <div class="py-6 border-b last:border-0">
@@ -131,13 +123,14 @@ function navigateToProfile(tokenId) {
             </div>
             <div class="flex flex-wrap gap-2">
                 {#each group.owners as ownerTokenId}
-                    <button
-                        on:click={() => navigateToProfile(ownerTokenId)}
-                        class="hover:opacity-80 transition-opacity"
+                    <a
+                        href={`${source_explorer_url}?profile=${ownerTokenId}`}
+                        target="_blank"
+                        class="hover:opacity-80 transition-opacity inline-block"
                         title={`View profile @${ownerTokenId.slice(0, 8)}...`}
                     >
                         {@html getAvatarSvg(ownerTokenId)}
-                    </button>
+                    </a>
                 {/each}
             </div>
         </div>

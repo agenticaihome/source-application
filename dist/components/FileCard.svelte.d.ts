@@ -11,6 +11,7 @@ declare const __propDef: {
         unavailableSources?: CachedData<UnavailableSource[]>;
         isLoading?: boolean;
         explorerUri: string;
+        source_explorer_url: string;
         webExplorerUriTkn: string;
         class?: string;
     };
