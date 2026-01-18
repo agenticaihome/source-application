@@ -23,6 +23,7 @@
     export let reputationProof: ReputationProof | null = null;
     export let explorerUri: string;
     export let webExplorerUriTkn: string;
+    export let source_explorer_url: string;
 
     // Data Props
     export let fileSources: CachedData<FileSource[]> = {};
@@ -221,6 +222,7 @@
                         : null}
                     {reputationProof}
                     {explorerUri}
+                    {source_explorer_url}
                     currentSources={sources}
                 />
             {/each}
@@ -231,6 +233,7 @@
                     {invalidFileSources}
                     {unavailableSources}
                     {webExplorerUriTkn}
+                    {source_explorer_url}
                 />
             {/each}
         {:else if viewMode === "timeline"}
@@ -238,6 +241,7 @@
                 events={timelineEvents}
                 title="File Source Opinion History"
                 {webExplorerUriTkn}
+                {source_explorer_url}
             />
         {/if}
     </div>

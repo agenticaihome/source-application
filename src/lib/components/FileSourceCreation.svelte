@@ -13,6 +13,7 @@
     // Props for island mode
     export let profile: ReputationProof | null = null;
     export let explorerUri: string;
+    export let source_explorer_url: string;
     export let onSourceAdded: ((txId: string) => void) | null = null;
     export let hash: Writable<string> | undefined = undefined;
 
@@ -175,7 +176,13 @@
         {#if newFileHash}
             <div class="text-xs font-mono text-muted-foreground break-all">
                 <span class="font-semibold text-primary/70">Hash:</span>
-                {newFileHash}
+                <a
+                    href={`${source_explorer_url}?search=${newFileHash}`}
+                    target="_blank"
+                    class="hover:underline text-primary"
+                >
+                    {newFileHash}
+                </a>
             </div>
         {:else}
             <div class="text-xs text-muted-foreground italic">

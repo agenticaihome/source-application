@@ -8,6 +8,7 @@
     export let profile: ReputationProof | null = null;
     export let address: string | null = null;
     export let explorerUri: string;
+    export let source_explorer_url: string;
     export let onProfileCreated: ((txId: string) => void) | null = null;
 
     let isCreating = false;
@@ -59,11 +60,13 @@
                                     >Profile Token ID</span
                                 >
                             </div>
-                            <p
-                                class="font-mono text-xs break-all text-foreground"
+                            <a
+                                href={`${source_explorer_url}?profile=${profile.token_id}`}
+                                target="_blank"
+                                class="font-mono text-xs break-all text-primary hover:underline"
                             >
                                 {profile.token_id}
-                            </p>
+                            </a>
                         </div>
                         <Button
                             variant="ghost"

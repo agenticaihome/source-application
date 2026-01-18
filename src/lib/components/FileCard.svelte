@@ -31,6 +31,7 @@
     export let unavailableSources: CachedData<UnavailableSource[]> = {};
     export let isLoading: boolean = false;
     export let explorerUri: string;
+    export let source_explorer_url: string;
     export let webExplorerUriTkn: string;
 
     let className: string = "";
@@ -271,17 +272,24 @@
                         {group}
                         {fileHash}
                         {explorerUri}
+                        {source_explorer_url}
                         userProfileTokenId={profile?.token_id ?? null}
                     />
                 {/each}
             {:else if viewMode === "profile"}
                 {#each groupedByProfile as group (group.profileTokenId)}
-                    <ProfileSourceGroup {group} {webExplorerUriTkn} />
+                    <ProfileSourceGroup
+                        {group}
+                        {webExplorerUriTkn}
+                        {source_explorer_url}
+                    />
                 {/each}
             {:else if viewMode === "timeline"}
                 <Timeline
                     events={timelineEvents}
                     title="File Source Opinion History"
+                    {webExplorerUriTkn}
+                    {source_explorer_url}
                 />
             {/if}
         </div>

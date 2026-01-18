@@ -23,6 +23,7 @@
     export let explorerUri: string;
     export let webExplorerUriTkn: string;
     export let webExplorerUriTx: string;
+    export let source_explorer_url: string;
 
     // Data Props (CachedData maps)
     export let fileSources: CachedData<FileSource[]> = {};
@@ -312,6 +313,7 @@
                         {explorerUri}
                         {webExplorerUriTx}
                         {webExplorerUriTkn}
+                        {source_explorer_url}
                     />
                 {/each}
             </div>
@@ -322,6 +324,7 @@
                 events={timelineEvents}
                 title="Profile Activity History"
                 {webExplorerUriTkn}
+                {source_explorer_url}
             />
         {:else}
             <div

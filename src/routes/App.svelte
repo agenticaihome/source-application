@@ -55,6 +55,9 @@
 		$reputation_proof !== null &&
 		$reputation_proof?.current_boxes?.length > 0;
 
+	// Source Explorer URL - defaults to current origin
+	$: source_explorer_url = $page.url.origin;
+
 	// URL Synchronization
 	$: {
 		const profile = $page.url.searchParams.get("profile");
@@ -463,6 +466,7 @@
 				explorerUri={$explorer_uri}
 				webExplorerUriTkn={$web_explorer_uri_tkn}
 				webExplorerUriTx={$web_explorer_uri_tx}
+				{source_explorer_url}
 				fileSources={$fileSources}
 				invalidFileSources={$invalidFileSources}
 				unavailableSources={$unavailableSources}
@@ -480,6 +484,7 @@
 				reputationProof={$reputation_proof}
 				explorerUri={$explorer_uri}
 				webExplorerUriTkn={$web_explorer_uri_tkn}
+				{source_explorer_url}
 				fileSources={$fileSources}
 				invalidFileSources={$invalidFileSources}
 				unavailableSources={$unavailableSources}
@@ -491,6 +496,7 @@
 			<FileSourceCreation
 				profile={$reputation_proof}
 				explorerUri={$explorer_uri}
+				{source_explorer_url}
 				hash={creationHashStore}
 			/>
 			{#if $creationHashStore}

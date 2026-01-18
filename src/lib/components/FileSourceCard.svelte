@@ -24,8 +24,6 @@
         CloudOff,
     } from "lucide-svelte";
     import * as jdenticon from "jdenticon";
-    import { page } from "$app/stores";
-    import { goto } from "$app/navigation";
 
     export let source: FileSource;
     export let confirmations: FileSource[] = [];
@@ -35,6 +33,7 @@
     // New props to replace stores
     export let profile: ReputationProof | null = null;
     export let explorerUri: string;
+    export let source_explorer_url: string;
     export let webExplorerUriTx: string;
     export let webExplorerUriTkn: string;
 
@@ -181,22 +180,6 @@
     }
 
     $: statusBadge = getStatusBadge();
-
-    function navigateToProfile(tokenId: string) {
-        const url = new URL($page.url);
-        url.searchParams.set("profile", tokenId);
-        url.searchParams.set("tab", "profile");
-        url.searchParams.delete("search");
-        goto(url.toString(), { keepFocus: true, noScroll: true });
-    }
-
-    function navigateToSearch(fileHash: string) {
-        const url = new URL($page.url);
-        url.searchParams.set("search", fileHash);
-        url.searchParams.set("tab", "search");
-        url.searchParams.delete("profile");
-        goto(url.toString(), { keepFocus: true, noScroll: true });
-    }
 </script>
 
 <div
@@ -204,25 +187,27 @@
 >
     <div class="flex items-start gap-4">
         <!-- Owner Avatar -->
-        <button
+        <a
+            href={`${source_explorer_url}?profile=${source.ownerTokenId}`}
+            target="_blank"
             class="flex-shrink-0 hover:opacity-80 transition-opacity"
-            on:click={() => navigateToProfile(source.ownerTokenId)}
             title="View profile sources"
         >
             {@html getAvatarSvg(source.ownerTokenId, 48)}
-        </button>
+        </a>
 
         <!-- Main Content -->
         <div class="flex-1 min-w-0">
             <!-- Header: Owner + Status -->
             <div class="flex items-center gap-2 mb-2 flex-wrap">
-                <button
-                    on:click={() => navigateToProfile(source.ownerTokenId)}
+                <a
+                    href={`${source_explorer_url}?profile=${source.ownerTokenId}`}
+                    target="_blank"
                     class="text-sm font-medium text-primary hover:underline"
                     title="View profile sources"
                 >
                     @{source.ownerTokenId.slice(0, 8)}...
-                </button>
+                </a>
                 <a
                     href={`${webExplorerUriTkn}${source.ownerTokenId}`}
                     target="_blank"
@@ -244,13 +229,14 @@
             <div class="mb-3">
                 <div class="text-xs text-muted-foreground mb-1">File Hash:</div>
                 <div class="flex items-center gap-2">
-                    <button
-                        on:click={() => navigateToSearch(source.fileHash)}
-                        class="text-sm bg-secondary px-2 py-1 rounded font-mono break-all hover:bg-secondary/80 text-left"
+                    <a
+                        href={`${source_explorer_url}?search=${source.fileHash}`}
+                        target="_blank"
+                        class="text-sm bg-secondary px-2 py-1 rounded font-mono break-all hover:bg-secondary/80 text-left text-foreground"
                         title="Search for this hash"
                     >
                         {source.fileHash}
-                    </button>
+                    </a>
                     <button
                         on:click={() => copyToClipboard(source.fileHash)}
                         class="p-1 hover:bg-secondary rounded"

@@ -12,6 +12,7 @@
     export let invalidFileSources: CachedData<InvalidFileSource[]> = {};
     export let unavailableSources: CachedData<UnavailableSource[]> = {};
     export let webExplorerUriTkn: string;
+    export let source_explorer_url: string;
 
     function getAvatarSvg(tokenId: string, size = 48): string {
         return jdenticon.toSvg(tokenId, size);
@@ -36,9 +37,13 @@
         <div class="flex-1 min-w-0">
             <!-- Profile Header -->
             <div class="flex items-center gap-2 mb-3">
-                <span class="text-sm font-medium text-primary">
+                <a
+                    href={`${source_explorer_url}?profile=${group.profileTokenId}`}
+                    target="_blank"
+                    class="text-sm font-medium text-primary hover:underline"
+                >
                     @{group.profileTokenId.slice(0, 8)}...
-                </span>
+                </a>
                 <a
                     href={`${webExplorerUriTkn}${group.profileTokenId}`}
                     target="_blank"
