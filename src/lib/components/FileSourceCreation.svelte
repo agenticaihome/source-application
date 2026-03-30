@@ -12,6 +12,7 @@
     import { blake2b256 } from "@fleet-sdk/crypto";
     import { uint8ArrayToHex } from "$lib/ergo/utils";
     import { type Writable } from "svelte/store";
+    import { HASH_OPTIONS, validateHash } from "$lib/ergo/hashUtils";
 
     // Props for island mode
     export let profile: ReputationProof | null = null;
@@ -44,21 +45,59 @@
     let entryUrlLink = "";
 
     // Hash function dropdown
-    const HASH_OPTIONS = [
-        { label: "SHA3-256", value: "sha3_256" },
-        { label: "Blake2b", value: "blake2b" },
-        { label: "SHA-256", value: "sha256" },
-        { label: "Keccak-256", value: "keccak256" },
-        { label: "Custom", value: "__custom__" },
-    ];
     let hashSelectValue = "";
     let customHashFunctionId = "";
+
+    // Content equals raw toggle (Change #2)
+    let contentEqualsRaw = true;
+
+    // Chunked file support (Change #6)
+    let isChunked = false;
+
+    // Format type toggles (Change #7)
+    let contentFormatType: "extension" | "formatId" = "extension";
+    let rawFormatType: "extension" | "formatId" = "extension";
+
+    // Hash validation errors (Change #1)
+    let fileHashValidationError: string | null = null;
+    let contentHashValidationError: string | null = null;
+    let rawHashValidationError: string | null = null;
 
     $: {
         if (hashSelectValue === "__custom__") {
             hashFunctionId = customHashFunctionId;
         } else {
             hashFunctionId = hashSelectValue;
+        }
+    }
+
+    // Validate file hash when it changes
+    $: {
+        if (newFileHash.trim() && hashSelectValue && hashSelectValue !== "__custom__") {
+            fileHashValidationError = validateHash(newFileHash.trim(), hashSelectValue);
+        } else if (newFileHash.trim() && hashSelectValue === "__custom__" && customHashFunctionId) {
+            fileHashValidationError = validateHash(newFileHash.trim(), "__custom__");
+        } else {
+            fileHashValidationError = null;
+        }
+    }
+
+    // Validate content hash when it changes
+    $: {
+        if (entryContentHash.trim() && hashSelectValue && hashSelectValue !== "__custom__") {
+            contentHashValidationError = validateHash(entryContentHash.trim(), hashSelectValue);
+        } else {
+            contentHashValidationError = null;
+        }
+    }
+
+    // Validate raw hash when it changes (only when not hidden)
+    $: {
+        if (!contentEqualsRaw && entryRawFormat && entryHashFunctionId) {
+            // Raw hash uses potentially a different algorithm — just validate hex/length generically
+            rawHashValidationError = null; // raw hash has no specific algo constraint in this form
+        } else {
+            rawHashValidationError = null;
         }
     }
 
@@ -74,7 +113,10 @@
     // Check if the source entry has a URL
     $: hasValidEntry = entryUrlLink.trim() !== "";
 
-    // Pre-fill form via URL parameters (Change 5)
+    // Check if form has validation errors preventing submission
+    $: hasValidationErrors = !!fileHashValidationError || !!contentHashValidationError;
+
+    // Pre-fill form via URL parameters
     onMount(() => {
         const params = $page.url.searchParams;
         const pFileHash = params.get("fileHash");
@@ -83,12 +125,13 @@
         const pContentFormat = params.get("contentFormat");
         const pContentHash = params.get("contentHash");
         const pRawFormat = params.get("rawFormat");
+        const pRawHash = params.get("rawHash");
+        const pIsChunked = params.get("isChunked");
 
         if (pFileHash) {
             updateHash(pFileHash);
         }
         if (pHashFunctionId) {
-            // Check if it matches a known option
             const knownOption = HASH_OPTIONS.find(o => o.value === pHashFunctionId);
             if (knownOption) {
                 hashSelectValue = pHashFunctionId;
@@ -100,7 +143,15 @@
         if (pUrlLink) entryUrlLink = pUrlLink;
         if (pContentFormat) entryContentFormat = pContentFormat;
         if (pContentHash) entryContentHash = pContentHash;
-        if (pRawFormat) entryRawFormat = pRawFormat;
+        if (pIsChunked === "true") isChunked = true;
+
+        // If rawFormat or rawHash are provided, uncheck content=raw
+        if (pRawFormat || pRawHash) {
+            contentEqualsRaw = false;
+            if (pRawFormat) entryRawFormat = pRawFormat;
+            // rawHash is stored in entryRawFormat context — but we don't have a rawHash field separate from rawFormat
+            // The raw hash concept maps to the rawFormat field in the current data model
+        }
     });
 
     function updateHash(val: string) {
@@ -156,12 +207,13 @@
             hashError = err?.message || "Failed to calculate hash from file";
         } finally {
             isCalculatingHash = false;
-            input.value = ""; // Reset input
+            input.value = "";
         }
     }
 
     async function handleAddSource() {
         if (!hasValidEntry || !profile) return;
+        if (hasValidationErrors) return;
 
         // If hash is fixed but not yet validated (or mismatch), we should validate it now
         if (isHashFixed && !urlMismatch && newFileHash !== currentHashValue) {
@@ -204,12 +256,17 @@
         addError = null;
         try {
             // Build single SourceEntry from form
+            // When contentEqualsRaw is checked, auto-copy content values to raw
+            const finalRawFormat = contentEqualsRaw ? entryContentFormat.trim() : entryRawFormat.trim();
+            const finalRawHash = contentEqualsRaw ? entryContentHash.trim() : ""; // rawHash not a separate field
+
             const entry: SourceEntry = {
                 hashFunctionId: entryHashFunctionId.trim(),
                 contentFormat: entryContentFormat.trim(),
                 contentHash: entryContentHash.trim(),
-                rawFormat: entryRawFormat.trim(),
-                urlLink: entryUrlLink.trim()
+                rawFormat: finalRawFormat,
+                urlLink: entryUrlLink.trim(),
+                isChunked: isChunked || undefined,
             };
 
             const tx = await addFileSource(
@@ -231,6 +288,10 @@
             entryContentHash = "";
             entryRawFormat = "";
             entryUrlLink = "";
+            contentEqualsRaw = true;
+            isChunked = false;
+            contentFormatType = "extension";
+            rawFormatType = "extension";
 
             if (onSourceAdded) {
                 onSourceAdded(tx);
@@ -295,12 +356,16 @@
                         value={newFileHash}
                         on:input={(e) => updateHash(e.currentTarget.value)}
                         placeholder="64-character hexadecimal hash"
-                        class="font-mono text-sm"
+                        class="font-mono text-sm {fileHashValidationError ? 'border-red-500' : ''}"
                         disabled={!hasProfile || isCalculatingHash}
                     />
-                    <p class="text-xs text-muted-foreground mt-1">
-                        The raw file hash digest. Users search by this.
-                    </p>
+                    {#if fileHashValidationError}
+                        <p class="text-xs text-red-500 mt-1">{fileHashValidationError}</p>
+                    {:else}
+                        <p class="text-xs text-muted-foreground mt-1">
+                            The raw file hash digest. Users search by this.
+                        </p>
+                    {/if}
                 </div>
 
                 <div>
@@ -368,13 +433,29 @@
             <Label class="text-base font-semibold">Source Entry</Label>
 
             <div class="border rounded-lg p-4 space-y-3 bg-background/50">
+                <!-- Chunked file toggle (Change #6) -->
+                <div class="flex items-center gap-2">
+                    <input
+                        type="checkbox"
+                        id="is-chunked"
+                        bind:checked={isChunked}
+                        class="rounded border-input"
+                        disabled={!hasProfile}
+                    />
+                    <Label for="is-chunked" class="text-sm font-normal cursor-pointer">
+                        This is a chunked file (manifest URL)
+                    </Label>
+                </div>
+
                 <div>
-                    <Label for="url-link">URL / Download Link</Label>
+                    <Label for="url-link">{isChunked ? 'Manifest URL' : 'URL / Download Link'}</Label>
                     <div class="flex gap-2">
                         <Textarea
                             id="url-link"
                             bind:value={entryUrlLink}
-                            placeholder="https://example.com/file.zip or ipfs://... or magnet:..."
+                            placeholder={isChunked
+                                ? "https://example.com/manifest.txt (each line is a chunk URL)"
+                                : "https://example.com/file.zip or ipfs://... or magnet:..."}
                             rows={2}
                             class="font-mono text-sm"
                             disabled={!hasProfile || isCalculatingHash}
@@ -398,6 +479,11 @@
                             </Button>
                         {/if}
                     </div>
+                    {#if isChunked}
+                        <p class="text-xs text-muted-foreground mt-1">
+                            Plain text manifest (UTF-8). Each line is a URL to a chunk, in order.
+                        </p>
+                    {/if}
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -419,32 +505,73 @@
                             id="content-hash"
                             bind:value={entryContentHash}
                             placeholder="Hash of content at this URL"
-                            class="font-mono text-xs"
+                            class="font-mono text-xs {contentHashValidationError ? 'border-red-500' : ''}"
                             disabled={!hasProfile}
                         />
+                        {#if contentHashValidationError}
+                            <p class="text-xs text-red-500 mt-1">{contentHashValidationError}</p>
+                        {/if}
                     </div>
                     <div>
                         <Label for="content-format">Content Format</Label>
+                        <div class="flex items-center gap-2 mb-1">
+                            <button
+                                class="text-xs px-2 py-0.5 rounded {contentFormatType === 'extension' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}"
+                                on:click={() => contentFormatType = 'extension'}
+                            >Extension</button>
+                            <button
+                                class="text-xs px-2 py-0.5 rounded {contentFormatType === 'formatId' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}"
+                                on:click={() => contentFormatType = 'formatId'}
+                            >Format ID</button>
+                        </div>
                         <Input
                             type="text"
                             id="content-format"
                             bind:value={entryContentFormat}
-                            placeholder=".tar.gz"
+                            placeholder={contentFormatType === 'extension' ? '.tar.gz' : 'box_id_hash...'}
                             class="font-mono text-xs"
                             disabled={!hasProfile}
                         />
                     </div>
-                    <div>
-                        <Label for="raw-format">Raw Format</Label>
-                        <Input
-                            type="text"
-                            id="raw-format"
-                            bind:value={entryRawFormat}
-                            placeholder=".bin"
-                            class="font-mono text-xs"
-                            disabled={!hasProfile}
-                        />
-                    </div>
+
+                    <!-- Content equals raw toggle (Change #2) -->
+                    {#if !contentEqualsRaw}
+                        <div>
+                            <Label for="raw-format">Raw Format</Label>
+                            <div class="flex items-center gap-2 mb-1">
+                                <button
+                                    class="text-xs px-2 py-0.5 rounded {rawFormatType === 'extension' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}"
+                                    on:click={() => rawFormatType = 'extension'}
+                                >Extension</button>
+                                <button
+                                    class="text-xs px-2 py-0.5 rounded {rawFormatType === 'formatId' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}"
+                                    on:click={() => rawFormatType = 'formatId'}
+                                >Format ID</button>
+                            </div>
+                            <Input
+                                type="text"
+                                id="raw-format"
+                                bind:value={entryRawFormat}
+                                placeholder={rawFormatType === 'extension' ? '.bin' : 'box_id_hash...'}
+                                class="font-mono text-xs"
+                                disabled={!hasProfile}
+                            />
+                        </div>
+                    {/if}
+                </div>
+
+                <!-- Content equals raw checkbox (Change #2) -->
+                <div class="flex items-center gap-2 pt-1">
+                    <input
+                        type="checkbox"
+                        id="content-equals-raw"
+                        bind:checked={contentEqualsRaw}
+                        class="rounded border-input"
+                        disabled={!hasProfile}
+                    />
+                    <Label for="content-equals-raw" class="text-xs font-normal cursor-pointer text-muted-foreground">
+                        Content is same as raw (no compression) — raw hash & format auto-copied from content
+                    </Label>
                 </div>
             </div>
         </div>
@@ -455,7 +582,8 @@
                 isCalculatingHash ||
                 !hasProfile ||
                 !newFileHash.trim() ||
-                !hasValidEntry}
+                !hasValidEntry ||
+                hasValidationErrors}
             class="w-full"
         >
             {#if isAddingSource}

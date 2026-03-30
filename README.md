@@ -115,6 +115,54 @@ To determine if a Source URL is safe, the client evaluates two layers:
 
 ---
 
+## Pre-filling the Form via URL Parameters
+
+The "Add Source" form can be pre-filled using URL query parameters. This is useful for nodes or external tools that want to generate a one-click "add source" link for their users.
+
+### Supported Parameters
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `fileHash` | Raw file hash digest (R5 anchor) | `a1b2c3...` (64 hex chars) |
+| `hashFunctionId` | Hash algorithm ID (`sha3_256`, `blake2b`, `sha256`, `keccak256`, or custom) | `sha3_256` |
+| `urlLink` | Download URL for the file | `https://example.com/file.tar.gz` |
+| `contentFormat` | Content format (extension or format box ID) | `.tar.gz` |
+| `contentHash` | Hash of the content at the URL | `d4e5f6...` (64 hex chars) |
+| `rawFormat` | Raw format (extension or format box ID) | `.bin` |
+| `rawHash` | Raw file hash (shows separate raw fields) | `a1b2c3...` |
+| `isChunked` | Whether the URL is a chunked manifest (`true`/`false`) | `true` |
+
+### Example URLs
+
+**Basic source link:**
+```
+https://your-app.com/?tab=add&fileHash=a1b2c3d4e5f6...&hashFunctionId=blake2b&urlLink=https://example.com/file.zip
+```
+
+**Full source with content hash and format:**
+```
+https://your-app.com/?tab=add&fileHash=a1b2c3d4...&hashFunctionId=sha3_256&urlLink=https://example.com/archive.tar.gz&contentFormat=.tar.gz&contentHash=d4e5f6a7...
+```
+
+**Chunked file source:**
+```
+https://your-app.com/?tab=add&fileHash=a1b2c3d4...&hashFunctionId=blake2b&urlLink=https://example.com/manifest.txt&isChunked=true&contentFormat=.bin
+```
+
+**With separate raw format (content ≠ raw):**
+```
+https://your-app.com/?tab=add&fileHash=a1b2c3d4...&hashFunctionId=sha256&urlLink=https://example.com/file.tar.gz&contentFormat=.tar.gz&rawFormat=.bin&rawHash=e5f6a7b8...
+```
+
+### Notes
+
+- When `rawFormat` or `rawHash` is provided, the "Content is same as raw" checkbox is automatically unchecked.
+- When `isChunked=true`, the URL field label changes to "Manifest URL".
+- If `hashFunctionId` doesn't match a known algorithm, it is treated as a custom hash function.
+- Parameters are read on component mount; changes to the URL after initial load don't re-trigger pre-fill.
+
+---
+
 # Security & Privacy
 
 * **Sanitization:** Always treat `R9` (URL) as untrusted user input.

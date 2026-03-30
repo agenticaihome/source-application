@@ -10,12 +10,19 @@
 // Represents a single source entry within a FILE_SOURCE box.
 // Each entry maps to a tuple in the Coll[Coll[Byte]] structure:
 // (hash_function_id, content_format, content_hash, raw_format, url_link)
+//
+// Format fields (contentFormat, rawFormat) accept EITHER:
+//   - A simple file extension string, e.g. ".tar.gz"
+//   - A hash/box ID referencing a skill format definition
+//     (per https://github.com/celaut-project/skills)
+// The consumer determines interpretation.
 export interface SourceEntry {
     hashFunctionId: string;       // Hash function identifier (HASH(EMPTY_INPUT))
-    contentFormat: string;        // Content file format extension (e.g. ".tar.gz", ".zip")
+    contentFormat: string;        // Content file format extension (e.g. ".tar.gz") or format box ID
     contentHash: string;          // Hash of the content at the URL
-    rawFormat: string;            // Raw (uncompressed) file format extension (e.g. ".bin", ".raw")
+    rawFormat: string;            // Raw (uncompressed) file format extension or format box ID
     urlLink: string;              // The download URL
+    isChunked?: boolean;          // If true, urlLink points to a manifest of chunk URLs (default false)
 }
 
 // --- FILE_SOURCE (Box Type 1) ---
@@ -286,14 +293,18 @@ export function aggregateSourceScore(
  * [hash_function_id, content_format, content_hash, raw_format, url_link]
  */
 export function serializeSourceEntry(entry: SourceEntry): string {
-    const tuples = [[
+    const tuple: (string | boolean)[] = [
         entry.hashFunctionId,
         entry.contentFormat,
         entry.contentHash,
         entry.rawFormat,
         entry.urlLink
-    ]];
-    return JSON.stringify(tuples);
+    ];
+    // Append isChunked flag as 6th element when true
+    if (entry.isChunked) {
+        tuple.push(true);
+    }
+    return JSON.stringify([tuple]);
 }
 
 /**
@@ -321,7 +332,8 @@ export function deserializeSourceEntry(content: string): SourceEntry {
                     contentFormat: tuple[1] || '',
                     contentHash: tuple[2] || '',
                     rawFormat: tuple[3] || '',
-                    urlLink: tuple[4] || ''
+                    urlLink: tuple[4] || '',
+                    isChunked: tuple[5] === true
                 };
             }
             // Handle object format as well
@@ -331,7 +343,8 @@ export function deserializeSourceEntry(content: string): SourceEntry {
                     contentFormat: tuple.contentFormat || tuple.contentFormatNftId || '',
                     contentHash: tuple.contentHash || '',
                     rawFormat: tuple.rawFormat || tuple.rawFormatNftId || '',
-                    urlLink: tuple.urlLink || ''
+                    urlLink: tuple.urlLink || '',
+                    isChunked: tuple.isChunked === true
                 };
             }
         }
@@ -345,6 +358,7 @@ export function deserializeSourceEntry(content: string): SourceEntry {
         contentFormat: '',
         contentHash: '',
         rawFormat: '',
-        urlLink: content
+        urlLink: content,
+        isChunked: false
     };
 }

@@ -24,8 +24,11 @@
         X,
         Pen,
         CloudOff,
+        ShieldCheck,
+        Loader2,
     } from "lucide-svelte";
     import * as jdenticon from "jdenticon";
+    import { downloadAndHash } from "$lib/ergo/hashUtils";
 
     export let source: FileSource;
     export let confirmations: FileSource[] = [];
@@ -74,6 +77,12 @@
     let isEditingSource = false;
     let editUrlLink = source.source?.urlLink || '';
     let isUpdatingSource = false;
+
+    // Hash verification state (Change #5)
+    let isVerifying = false;
+    let verifyResult: 'match' | 'mismatch' | 'error' | null = null;
+    let verifyMessage: string | null = null;
+    let verifyProgress: string | null = null;
 
     function getAvatarSvg(tokenId: string, size = 40): string {
         return jdenticon.toSvg(tokenId, size);
@@ -164,6 +173,56 @@
             voteError = err?.message || "Failed to update source";
         } finally {
             isUpdatingSource = false;
+        }
+    }
+
+    async function handleVerifyHash() {
+        if (!sourceEntry?.urlLink || !sourceEntry.contentHash) {
+            verifyResult = 'error';
+            verifyMessage = 'No URL or content hash to verify against.';
+            return;
+        }
+
+        const algorithmId = source.hashFunctionId || sourceEntry.hashFunctionId;
+        if (!algorithmId || algorithmId === '__custom__') {
+            verifyResult = 'error';
+            verifyMessage = 'Cannot verify: custom hash algorithm';
+            alert('Cannot verify: custom hash algorithm');
+            return;
+        }
+
+        isVerifying = true;
+        verifyResult = null;
+        verifyMessage = null;
+        verifyProgress = null;
+
+        try {
+            const isChunked = sourceEntry.isChunked === true;
+            const computedHash = await downloadAndHash(
+                sourceEntry.urlLink,
+                algorithmId,
+                isChunked,
+                (current, total) => {
+                    verifyProgress = `Downloading chunk ${current + 1}/${total}...`;
+                }
+            );
+
+            if (computedHash === sourceEntry.contentHash) {
+                verifyResult = 'match';
+                verifyMessage = 'Hash verified — content matches!';
+            } else {
+                verifyResult = 'mismatch';
+                verifyMessage = `Hash mismatch! Expected: ${sourceEntry.contentHash.slice(0, 16)}... Got: ${computedHash.slice(0, 16)}...`;
+            }
+        } catch (err: any) {
+            verifyResult = 'error';
+            verifyMessage = err?.message || 'Verification failed';
+            if (err?.message?.includes('custom hash algorithm')) {
+                alert(err.message);
+            }
+        } finally {
+            isVerifying = false;
+            verifyProgress = null;
         }
     }
 
@@ -334,8 +393,8 @@
                         {/if}
                     </div>
 
-                    <!-- Entry metadata (content hash, format) -->
-                    {#if sourceEntry.contentHash || sourceEntry.contentFormat || sourceEntry.rawFormat}
+                    <!-- Entry metadata (content hash, format, chunked) -->
+                    {#if sourceEntry.contentHash || sourceEntry.contentFormat || sourceEntry.rawFormat || sourceEntry.isChunked}
                         <div class="mt-1 flex flex-wrap gap-2 text-xs">
                             {#if sourceEntry.contentHash}
                                 <span class="bg-secondary/50 px-1.5 py-0.5 rounded font-mono" title="Content Hash">
@@ -350,6 +409,46 @@
                             {#if sourceEntry.rawFormat}
                                 <span class="bg-secondary/50 px-1.5 py-0.5 rounded font-mono" title="Raw Format">
                                     📦 {sourceEntry.rawFormat}
+                                </span>
+                            {/if}
+                            {#if sourceEntry.isChunked}
+                                <span class="bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded font-mono" title="Chunked manifest">
+                                    🧩 Chunked
+                                </span>
+                            {/if}
+                        </div>
+                    {/if}
+
+                    <!-- Hash verification button (Change #5) -->
+                    {#if sourceEntry.contentHash && sourceEntry.urlLink}
+                        <div class="mt-2 flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                on:click={handleVerifyHash}
+                                disabled={isVerifying}
+                                class="text-xs h-7"
+                                title="Download content and verify hash"
+                            >
+                                {#if isVerifying}
+                                    <Loader2 class="w-3 h-3 mr-1 animate-spin" />
+                                    {verifyProgress || 'Verifying...'}
+                                {:else}
+                                    <ShieldCheck class="w-3 h-3 mr-1" />
+                                    Verify Hash
+                                {/if}
+                            </Button>
+                            {#if verifyResult === 'match'}
+                                <span class="text-xs text-green-500 flex items-center gap-1">
+                                    <Check class="w-3 h-3" /> {verifyMessage}
+                                </span>
+                            {:else if verifyResult === 'mismatch'}
+                                <span class="text-xs text-red-500 flex items-center gap-1">
+                                    <X class="w-3 h-3" /> {verifyMessage}
+                                </span>
+                            {:else if verifyResult === 'error'}
+                                <span class="text-xs text-amber-500">
+                                    {verifyMessage}
                                 </span>
                             {/if}
                         </div>

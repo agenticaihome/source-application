@@ -240,7 +240,7 @@
 
 	// --- Centralized State Actions ---
 
-	async function handleSearch(hash: string) {
+	async function handleSearch(hash: string, _algorithm?: string) {
 		if (!hash) return;
 		isLoading.set(true);
 		currentSearchHash.set(hash);
@@ -499,20 +499,6 @@
 				{source_explorer_url}
 				hash={creationHashStore}
 			/>
-			{#if $creationHashStore}
-				<div
-					class="mt-4 p-3 bg-muted rounded-md border border-dashed text-center"
-				>
-					<p
-						class="text-xs text-muted-foreground uppercase tracking-wider font-semibold mb-1"
-					>
-						Calculated Hash (Synced with Parent)
-					</p>
-					<code class="text-sm font-mono break-all"
-						>{$creationHashStore}</code
-					>
-				</div>
-			{/if}
 		{/if}
 	</div>
 </main>
