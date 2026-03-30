@@ -1,10 +1,11 @@
 <script lang="ts">
     import { addFileSource } from "$lib/ergo/sourceStore";
+    import { type SourceEntry } from "$lib/ergo/sourceObject";
     import { Button } from "$lib/components/ui/button/index.js";
     import { Input } from "$lib/components/ui/input/index.js";
     import { Label } from "$lib/components/ui/label/index.js";
     import { Textarea } from "$lib/components/ui/textarea";
-    import { AlertTriangle, Download, Upload, Loader2 } from "lucide-svelte";
+    import { AlertTriangle, Download, Upload, Loader2, Plus, Trash2 } from "lucide-svelte";
     import { type ReputationProof } from "$lib/ergo/object";
     import { blake2b256 } from "@fleet-sdk/crypto";
     import { uint8ArrayToHex } from "$lib/ergo/utils";
@@ -25,13 +26,38 @@
     const baseClasses = "bg-card p-6 rounded-lg border";
 
     let newFileHash = "";
-    let newSourceUrl = "";
+    let hashFunctionId = "";
     let isAddingSource = false;
     let addError: string | null = null;
 
     let isCalculatingHash = false;
     let hashError: string | null = null;
     let urlMismatch = false;
+
+    // Source entries array
+    interface SourceEntryForm {
+        hashFunctionId: string;
+        contentFormatNftId: string;
+        contentHash: string;
+        rawFormatNftId: string;
+        urlLink: string;
+    }
+
+    let sourceEntries: SourceEntryForm[] = [
+        { hashFunctionId: "", contentFormatNftId: "", contentHash: "", rawFormatNftId: "", urlLink: "" }
+    ];
+
+    function addSourceEntry() {
+        sourceEntries = [
+            ...sourceEntries,
+            { hashFunctionId: "", contentFormatNftId: "", contentHash: "", rawFormatNftId: "", urlLink: "" }
+        ];
+    }
+
+    function removeSourceEntry(index: number) {
+        if (sourceEntries.length <= 1) return;
+        sourceEntries = sourceEntries.filter((_, i) => i !== index);
+    }
 
     // Reactive value for the current hash from the store
     $: currentHashValue = (hash ? $hash : "") || "";
@@ -42,9 +68,8 @@
         newFileHash = $hash;
     }
 
-    $: if (newSourceUrl) {
-        urlMismatch = false;
-    }
+    // Check if at least one source entry has a URL
+    $: hasValidEntry = sourceEntries.some(e => e.urlLink.trim() !== "");
 
     function updateHash(val: string) {
         newFileHash = val;
@@ -54,13 +79,14 @@
     }
 
     async function calculateHashFromUrl() {
-        if (!newSourceUrl.trim()) return;
+        const firstUrl = sourceEntries[0]?.urlLink?.trim();
+        if (!firstUrl) return;
 
         isCalculatingHash = true;
         hashError = null;
         urlMismatch = false;
         try {
-            const response = await fetch(newSourceUrl.trim());
+            const response = await fetch(firstUrl);
             if (!response.ok)
                 throw new Error(`Failed to fetch file: ${response.statusText}`);
             const buffer = await response.arrayBuffer();
@@ -103,20 +129,19 @@
     }
 
     async function handleAddSource() {
-        if (!newSourceUrl.trim() || !profile) return;
+        if (!hasValidEntry || !profile) return;
 
         // If hash is fixed but not yet validated (or mismatch), we should validate it now
         if (isHashFixed && !urlMismatch && newFileHash !== currentHashValue) {
-            // This case shouldn't happen if sync is working, but let's be safe
             newFileHash = currentHashValue;
         }
 
         // If it's fixed, we MUST validate the URL content before adding
-        if (isHashFixed) {
+        if (isHashFixed && sourceEntries[0]?.urlLink?.trim()) {
             isCalculatingHash = true;
             hashError = null;
             try {
-                const response = await fetch(newSourceUrl.trim());
+                const response = await fetch(sourceEntries[0].urlLink.trim());
                 if (!response.ok)
                     throw new Error(
                         `Failed to fetch file: ${response.statusText}`,
@@ -146,9 +171,21 @@
         isAddingSource = true;
         addError = null;
         try {
+            // Build SourceEntry array from form
+            const entries: SourceEntry[] = sourceEntries
+                .filter(e => e.urlLink.trim() !== "")
+                .map(e => ({
+                    hashFunctionId: e.hashFunctionId.trim(),
+                    contentFormatNftId: e.contentFormatNftId.trim(),
+                    contentHash: e.contentHash.trim(),
+                    rawFormatNftId: e.rawFormatNftId.trim(),
+                    urlLink: e.urlLink.trim()
+                }));
+
             const tx = await addFileSource(
                 newFileHash.trim(),
-                newSourceUrl.trim(),
+                hashFunctionId.trim(),
+                entries,
                 profile,
                 explorerUri,
             );
@@ -156,7 +193,10 @@
             if (!isHashFixed) {
                 updateHash("");
             }
-            newSourceUrl = "";
+            hashFunctionId = "";
+            sourceEntries = [
+                { hashFunctionId: "", contentFormatNftId: "", contentHash: "", rawFormatNftId: "", urlLink: "" }
+            ];
 
             if (onSourceAdded) {
                 onSourceAdded(tx);
@@ -211,45 +251,10 @@
     {/if}
 
     <div class="space-y-4">
-        <div>
-            <Label for="source-url">Source URL</Label>
-            <div class="flex gap-2">
-                <Textarea
-                    id="source-url"
-                    bind:value={newSourceUrl}
-                    placeholder="https://example.com/file.zip or ipfs://... or magnet:..."
-                    rows={2}
-                    class="font-mono text-sm"
-                    disabled={!hasProfile || isCalculatingHash}
-                />
-                {#if !isHashFixed}
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        class="flex-shrink-0 h-auto"
-                        on:click={calculateHashFromUrl}
-                        disabled={!hasProfile ||
-                            isCalculatingHash ||
-                            !newSourceUrl.trim()}
-                        title="Calculate hash from URL"
-                    >
-                        {#if isCalculatingHash}
-                            <Loader2 class="w-4 h-4 animate-spin" />
-                        {:else}
-                            <Download class="w-4 h-4" />
-                        {/if}
-                    </Button>
-                {/if}
-            </div>
-            <p class="text-xs text-muted-foreground mt-1">
-                HTTP(S) URL, IPFS CID, Magnet link, or any download source.
-            </p>
-        </div>
-
         {#if !isHashFixed}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <Label for="file-hash">File Hash (Blake2b256)</Label>
+                    <Label for="file-hash">Raw File Hash (R5 Anchor)</Label>
                     <Input
                         type="text"
                         id="file-hash"
@@ -260,7 +265,7 @@
                         disabled={!hasProfile || isCalculatingHash}
                     />
                     <p class="text-xs text-muted-foreground mt-1">
-                        Unique identifier for the file.
+                        The raw file hash digest. Users search by this.
                     </p>
                 </div>
 
@@ -297,13 +302,142 @@
             </div>
         {/if}
 
+        <div>
+            <Label for="hash-function-id">Hash Function ID</Label>
+            <Input
+                type="text"
+                id="hash-function-id"
+                bind:value={hashFunctionId}
+                placeholder="HASH(EMPTY_INPUT) identifier"
+                class="font-mono text-sm"
+                disabled={!hasProfile || isCalculatingHash}
+            />
+            <p class="text-xs text-muted-foreground mt-1">
+                Identifies the hash algorithm used. Per convention: output of HASH(EMPTY_INPUT).
+            </p>
+        </div>
+
+        <!-- Source Entries -->
+        <div class="space-y-4">
+            <div class="flex items-center justify-between">
+                <Label class="text-base font-semibold">Source Entries</Label>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    on:click={addSourceEntry}
+                    disabled={!hasProfile}
+                    class="text-xs"
+                >
+                    <Plus class="w-3 h-3 mr-1" />
+                    Add Entry
+                </Button>
+            </div>
+
+            {#each sourceEntries as entry, i}
+                <div class="border rounded-lg p-4 space-y-3 relative bg-background/50">
+                    {#if sourceEntries.length > 1}
+                        <button
+                            on:click={() => removeSourceEntry(i)}
+                            class="absolute top-2 right-2 p-1 hover:bg-destructive/10 rounded text-muted-foreground hover:text-destructive"
+                            title="Remove this entry"
+                        >
+                            <Trash2 class="w-4 h-4" />
+                        </button>
+                    {/if}
+
+                    <div class="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Source Entry {i + 1}
+                    </div>
+
+                    <div>
+                        <Label for="url-{i}">URL / Download Link</Label>
+                        <div class="flex gap-2">
+                            <Textarea
+                                id="url-{i}"
+                                bind:value={entry.urlLink}
+                                placeholder="https://example.com/file.zip or ipfs://... or magnet:..."
+                                rows={2}
+                                class="font-mono text-sm"
+                                disabled={!hasProfile || isCalculatingHash}
+                            />
+                            {#if i === 0 && !isHashFixed}
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    class="flex-shrink-0 h-auto"
+                                    on:click={calculateHashFromUrl}
+                                    disabled={!hasProfile ||
+                                        isCalculatingHash ||
+                                        !entry.urlLink.trim()}
+                                    title="Calculate hash from URL"
+                                >
+                                    {#if isCalculatingHash}
+                                        <Loader2 class="w-4 h-4 animate-spin" />
+                                    {:else}
+                                        <Download class="w-4 h-4" />
+                                    {/if}
+                                </Button>
+                            {/if}
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <Label for="entry-hash-fn-{i}">Hash Function ID</Label>
+                            <Input
+                                type="text"
+                                id="entry-hash-fn-{i}"
+                                bind:value={entry.hashFunctionId}
+                                placeholder="Hash function identifier"
+                                class="font-mono text-xs"
+                                disabled={!hasProfile}
+                            />
+                        </div>
+                        <div>
+                            <Label for="content-hash-{i}">Content Hash</Label>
+                            <Input
+                                type="text"
+                                id="content-hash-{i}"
+                                bind:value={entry.contentHash}
+                                placeholder="Hash of content at this URL"
+                                class="font-mono text-xs"
+                                disabled={!hasProfile}
+                            />
+                        </div>
+                        <div>
+                            <Label for="content-format-{i}">Content Format NFT ID</Label>
+                            <Input
+                                type="text"
+                                id="content-format-{i}"
+                                bind:value={entry.contentFormatNftId}
+                                placeholder="NFT ID for content file format"
+                                class="font-mono text-xs"
+                                disabled={!hasProfile}
+                            />
+                        </div>
+                        <div>
+                            <Label for="raw-format-{i}">Raw Format NFT ID</Label>
+                            <Input
+                                type="text"
+                                id="raw-format-{i}"
+                                bind:value={entry.rawFormatNftId}
+                                placeholder="NFT ID for raw (uncompressed) format"
+                                class="font-mono text-xs"
+                                disabled={!hasProfile}
+                            />
+                        </div>
+                    </div>
+                </div>
+            {/each}
+        </div>
+
         <Button
             on:click={handleAddSource}
             disabled={isAddingSource ||
                 isCalculatingHash ||
                 !hasProfile ||
                 !newFileHash.trim() ||
-                !newSourceUrl.trim()}
+                !hasValidEntry}
             class="w-full"
         >
             {#if isAddingSource}

@@ -6,12 +6,25 @@
  */
 
 
+// --- SOURCE ENTRY (Individual source tuple from R9) ---
+// Represents a single source entry within a FILE_SOURCE box.
+// Each entry maps to a tuple in the Coll[Coll[Byte]] structure:
+// (hash_function_id, content_format_nft_id, content_hash, raw_format_nft_id, url_link)
+export interface SourceEntry {
+    hashFunctionId: string;       // Hash function identifier (HASH(EMPTY_INPUT))
+    contentFormatNftId: string;   // NFT ID defining content file format
+    contentHash: string;          // Hash of the content at the URL
+    rawFormatNftId: string;       // NFT ID defining raw (uncompressed) format
+    urlLink: string;              // The download URL
+}
+
 // --- FILE_SOURCE (Box Type 1) ---
-// Represents a specific location (URL) where a file with a specific hash can be found.
+// Represents a set of download sources for a file with a specific raw hash.
 export interface FileSource {
     id: string;              // Box ID of the source
-    fileHash: string;        // R5: Blake2b256 digest (the anchor - users search by this)
-    sourceUrl: string;       // R9: Download link (URL, IPFS CID, Magnet link, etc.)
+    fileHash: string;        // R5: Raw file hash digest (the anchor - users search by this)
+    hashFunctionId: string;  // ID of hash function used (HASH(EMPTY_INPUT))
+    sources: SourceEntry[];  // R9: Array of source entries (parsed from Coll[Coll[Byte]])
     ownerTokenId: string;    // Reputation Token ID from assets[0]
     reputationAmount: number; // Amount of reputation tokens in this box
     timestamp: number;       // Block timestamp
@@ -94,7 +107,7 @@ export interface CachedData<T> {
 export interface FileSourceWithScore extends FileSource {
     confirmations: FileSource[];      // Other FILE_SOURCE boxes with same hash and URL
     invalidations: InvalidFileSource[]; // INVALID_FILE_SOURCE boxes for this boxId
-    unavailabilities: UnavailableSource[]; // UNAVAILABLE_SOURCE boxes for this URL
+    unavailabilities: UnavailableSource[]; // UNAVAILABLE_SOURCE boxes for URLs in sources
 
     confirmationScore: number; // Sum of reputation in confirmations
     invalidationScore: number; // Sum of reputation in invalidations
@@ -110,7 +123,7 @@ export interface FileSourceWithScore extends FileSource {
  */
 export interface DownloadSourceGroup {
     sourceUrl: string;
-    sources: FileSource[]; // All FILE_SOURCE boxes for this URL
+    sources: FileSource[]; // All FILE_SOURCE boxes containing this URL
     owners: string[];      // Unique owner token IDs
     invalidations: InvalidFileSource[]; // All invalidations for all sources in this group
     unavailabilities: UnavailableSource[]; // All unavailabilities for this URL
@@ -128,7 +141,23 @@ export interface ProfileSourceGroup {
 // --- HELPER FUNCTIONS ---
 
 /**
- * Group file sources by their download URL.
+ * Get the primary URL from a FileSource.
+ * Returns the first source entry's URL, or an empty string if no sources.
+ */
+export function getPrimaryUrl(source: FileSource): string {
+    return source.sources.length > 0 ? source.sources[0].urlLink : '';
+}
+
+/**
+ * Get all URLs from a FileSource.
+ */
+export function getAllUrls(source: FileSource): string[] {
+    return source.sources.map(s => s.urlLink);
+}
+
+/**
+ * Group file sources by their download URLs.
+ * A FileSource can contain multiple URLs; it will appear in each group.
  */
 export function groupByDownloadSource(
     sources: FileSource[],
@@ -138,24 +167,33 @@ export function groupByDownloadSource(
     const groups: Record<string, DownloadSourceGroup> = {};
 
     for (const source of sources) {
-        if (!groups[source.sourceUrl]) {
-            groups[source.sourceUrl] = {
-                sourceUrl: source.sourceUrl,
-                sources: [],
-                owners: [],
-                invalidations: [],
-                unavailabilities: unavailabilitiesMap[source.sourceUrl]?.data || []
-            };
-        }
+        // Get all URLs from the source entries
+        const urls = source.sources.map(s => s.urlLink).filter(Boolean);
+        if (urls.length === 0) continue;
 
-        groups[source.sourceUrl].sources.push(source);
-        if (!groups[source.sourceUrl].owners.includes(source.ownerTokenId)) {
-            groups[source.sourceUrl].owners.push(source.ownerTokenId);
-        }
+        for (const url of urls) {
+            if (!groups[url]) {
+                groups[url] = {
+                    sourceUrl: url,
+                    sources: [],
+                    owners: [],
+                    invalidations: [],
+                    unavailabilities: unavailabilitiesMap[url]?.data || []
+                };
+            }
 
-        // Add invalidations for this specific box
-        const boxInvalidations = invalidationsMap[source.id]?.data || [];
-        groups[source.sourceUrl].invalidations.push(...boxInvalidations);
+            // Avoid duplicating the same source in the same group
+            if (!groups[url].sources.some(s => s.id === source.id)) {
+                groups[url].sources.push(source);
+            }
+            if (!groups[url].owners.includes(source.ownerTokenId)) {
+                groups[url].owners.push(source.ownerTokenId);
+            }
+
+            // Add invalidations for this specific box
+            const boxInvalidations = invalidationsMap[source.id]?.data || [];
+            groups[url].invalidations.push(...boxInvalidations);
+        }
     }
 
     return Object.values(groups).sort((a, b) => b.sources.length - a.sources.length);
@@ -208,18 +246,19 @@ export function aggregateSourceScore(
     unavailabilities: UnavailableSource[],
     profileOpinions: ProfileOpinion[] = []
 ): FileSourceWithScore {
-    // Confirmations are other sources with same hash and URL
+    // Confirmations are other sources with same hash and overlapping URLs
+    const sourceUrls = new Set(source.sources.map(s => s.urlLink));
     const confirmations = allSources.filter(s =>
         s.id !== source.id &&
         s.fileHash === source.fileHash &&
-        s.sourceUrl === source.sourceUrl
+        s.sources.some(entry => sourceUrls.has(entry.urlLink))
     );
 
     // Invalidations for this specific box
     const filteredInvalidations = invalidations.filter(inv => inv.targetBoxId === source.id);
 
-    // Unavailabilities for this specific URL
-    const filteredUnavailabilities = unavailabilities.filter(un => un.sourceUrl === source.sourceUrl);
+    // Unavailabilities for any URL in this source
+    const filteredUnavailabilities = unavailabilities.filter(un => sourceUrls.has(un.sourceUrl));
 
     const confirmationScore = confirmations.reduce((sum, s) => sum + s.reputationAmount, 0);
     const invalidationScore = filteredInvalidations.reduce((sum, inv) => sum + inv.reputationAmount, 0);
@@ -237,4 +276,71 @@ export function aggregateSourceScore(
         unavailabilityScore,
         ownerTrustScore
     };
+}
+
+// --- SERIALIZATION HELPERS ---
+
+/**
+ * Serialize source entries to a JSON string for R9 content.
+ * The reputation-system library encodes this as Coll[Byte] (UTF-8 bytes).
+ * 
+ * Format: JSON array of tuples, each tuple being an array of 5 hex strings:
+ * [hash_function_id, content_format_nft_id, content_hash, raw_format_nft_id, url_link]
+ */
+export function serializeSourceEntries(entries: SourceEntry[]): string {
+    const tuples = entries.map(e => [
+        e.hashFunctionId,
+        e.contentFormatNftId,
+        e.contentHash,
+        e.rawFormatNftId,
+        e.urlLink
+    ]);
+    return JSON.stringify(tuples);
+}
+
+/**
+ * Deserialize source entries from R9 content string.
+ * Handles both the new JSON array format and legacy plain URL string.
+ */
+export function deserializeSourceEntries(content: string): SourceEntry[] {
+    if (!content || content.trim() === '') return [];
+
+    try {
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed)) {
+            return parsed.map((tuple: any) => {
+                if (Array.isArray(tuple) && tuple.length >= 5) {
+                    return {
+                        hashFunctionId: tuple[0] || '',
+                        contentFormatNftId: tuple[1] || '',
+                        contentHash: tuple[2] || '',
+                        rawFormatNftId: tuple[3] || '',
+                        urlLink: tuple[4] || ''
+                    };
+                }
+                // Handle object format as well
+                if (typeof tuple === 'object' && tuple !== null) {
+                    return {
+                        hashFunctionId: tuple.hashFunctionId || '',
+                        contentFormatNftId: tuple.contentFormatNftId || '',
+                        contentHash: tuple.contentHash || '',
+                        rawFormatNftId: tuple.rawFormatNftId || '',
+                        urlLink: tuple.urlLink || ''
+                    };
+                }
+                return null;
+            }).filter(Boolean) as SourceEntry[];
+        }
+    } catch {
+        // Not JSON — treat as legacy plain URL string
+    }
+
+    // Legacy format: R9 is just a plain URL string
+    return [{
+        hashFunctionId: '',
+        contentFormatNftId: '',
+        contentHash: '',
+        rawFormatNftId: '',
+        urlLink: content
+    }];
 }

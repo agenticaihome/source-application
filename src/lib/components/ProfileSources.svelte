@@ -13,6 +13,7 @@
         UnavailableSource,
         ProfileOpinion,
     } from "$lib/ergo/sourceObject";
+    import { getPrimaryUrl } from "$lib/ergo/sourceObject";
     import type { ReputationProof } from "$lib/ergo/object";
     import type { CachedData } from "$lib/ergo/sourceObject";
     import { FileSourceCard } from "$lib";
@@ -131,7 +132,7 @@
                 label: `Added a new download source`,
                 color: "#22c55e", // green-500
                 authorTokenId: activeProfileTokenId,
-                data: { sourceUrl: source.sourceUrl },
+                data: { sourceUrl: getPrimaryUrl(source) },
             });
         }
 
@@ -308,7 +309,7 @@
                         profile={reputationProof}
                         invalidations={invalidFileSources[source.id]?.data ||
                             []}
-                        unavailabilities={unavailableSources[source.sourceUrl]
+                        unavailabilities={unavailableSources[getPrimaryUrl(source)]
                             ?.data || []}
                         {explorerUri}
                         {webExplorerUriTx}

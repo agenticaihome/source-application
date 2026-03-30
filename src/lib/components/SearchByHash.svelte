@@ -4,6 +4,7 @@
     import {
         groupByDownloadSource,
         groupByProfile,
+        getPrimaryUrl,
         type TimelineEvent,
         type FileSource,
         type InvalidFileSource,
@@ -76,7 +77,7 @@
                 label: `New download source added`,
                 color: "#22c55e", // green-500
                 authorTokenId: source.ownerTokenId,
-                data: { sourceUrl: source.sourceUrl },
+                data: { sourceUrl: getPrimaryUrl(source) },
             });
         }
 
@@ -92,7 +93,7 @@
                         label: `Source marked as invalid`,
                         color: "#ef4444", // red-500
                         authorTokenId: inv.authorTokenId,
-                        data: { sourceUrl: targetSource.sourceUrl },
+                        data: { sourceUrl: getPrimaryUrl(targetSource) },
                     });
                 }
             }
@@ -101,7 +102,7 @@
         // Add unavailabilities
         for (const url in unavailableSources) {
             const unavs = unavailableSources[url]?.data || [];
-            if (sources.some((s) => s.sourceUrl === url)) {
+            if (sources.some((s) => s.sources.some(entry => entry.urlLink === url))) {
                 for (const unav of unavs) {
                     events.push({
                         timestamp: unav.timestamp,

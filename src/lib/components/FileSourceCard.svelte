@@ -3,6 +3,8 @@
         type FileSource,
         type InvalidFileSource,
         type UnavailableSource,
+        type SourceEntry,
+        getPrimaryUrl,
     } from "$lib/ergo/sourceObject";
     import {
         confirmSource,
@@ -22,6 +24,8 @@
         X,
         Pen,
         CloudOff,
+        ChevronDown,
+        ChevronUp,
     } from "lucide-svelte";
     import * as jdenticon from "jdenticon";
 
@@ -42,6 +46,7 @@
 
     let isVoting = false;
     let voteError: string | null = null;
+    let showAllEntries = false;
 
     $: confirmationScore = confirmations.reduce(
         (sum, op) => sum + op.reputationAmount,
@@ -66,8 +71,11 @@
         (op) => op.authorTokenId === userProfileTokenId,
     );
 
+    $: primaryUrl = getPrimaryUrl(source);
+    $: hasMultipleEntries = source.sources.length > 1;
+
     let isEditingSource = false;
-    let newSourceUrl = source.sourceUrl;
+    let editEntries: SourceEntry[] = [...source.sources];
     let isUpdatingSource = false;
 
     function getAvatarSvg(tokenId: string, size = 40): string {
@@ -78,6 +86,11 @@
         navigator.clipboard.writeText(text);
     }
 
+    function truncateId(id: string, chars: number = 8): string {
+        if (id.length <= chars * 2 + 3) return id;
+        return `${id.slice(0, chars)}...${id.slice(-chars)}`;
+    }
+
     async function handleConfirm() {
         if (!profile) return;
         isVoting = true;
@@ -85,11 +98,10 @@
         try {
             await confirmSource(
                 source.fileHash,
-                source.sourceUrl,
+                source.hashFunctionId,
+                source.sources,
                 profile,
-                confirmations, // Pass current confirmations as "currentSources" for check?
-                // Wait, confirmSource expects "currentSources: FileSource[]".
-                // confirmations IS FileSource[]. Correct.
+                confirmations,
                 explorerUri,
             );
             console.log("Source confirmed");
@@ -121,7 +133,7 @@
         isVoting = true;
         voteError = null;
         try {
-            await markUnavailableSource(source.sourceUrl, profile, explorerUri);
+            await markUnavailableSource(primaryUrl, profile, explorerUri);
             console.log("Source marked as unavailable");
         } catch (err: any) {
             console.error("Error marking unavailable:", err);
@@ -132,7 +144,7 @@
     }
 
     async function handleUpdateSource() {
-        if (!profile || !newSourceUrl.trim()) return;
+        if (!profile || editEntries.length === 0) return;
 
         isUpdatingSource = true;
         voteError = null;
@@ -140,7 +152,7 @@
             await updateFileSource(
                 source.id,
                 source.fileHash,
-                newSourceUrl.trim(),
+                editEntries,
                 profile,
                 explorerUri,
             );
@@ -227,7 +239,7 @@
 
             <!-- File Hash -->
             <div class="mb-3">
-                <div class="text-xs text-muted-foreground mb-1">File Hash:</div>
+                <div class="text-xs text-muted-foreground mb-1">Raw File Hash:</div>
                 <div class="flex items-center gap-2">
                     <a
                         href={`${source_explorer_url}?search=${source.fileHash}`}
@@ -247,65 +259,161 @@
                 </div>
             </div>
 
-            <!-- Source URL -->
+            <!-- Hash Function ID -->
+            {#if source.hashFunctionId}
+                <div class="mb-3">
+                    <div class="text-xs text-muted-foreground mb-1">Hash Function:</div>
+                    <div class="text-xs font-mono bg-secondary/50 px-2 py-1 rounded break-all">
+                        {truncateId(source.hashFunctionId, 12)}
+                    </div>
+                </div>
+            {/if}
+
+            <!-- Source Entries -->
             <div class="mb-3">
                 <div class="text-xs text-muted-foreground mb-1">
-                    Download Source:
+                    Download Source{source.sources.length > 1 ? 's' : ''}:
                 </div>
-                <div class="flex items-center gap-2">
-                    {#if isEditingSource}
-                        <div class="flex-1 flex gap-2">
-                            <Input
-                                bind:value={newSourceUrl}
-                                placeholder="New source URL"
-                                class="h-8 text-sm font-mono"
-                                disabled={isUpdatingSource}
-                            />
+
+                {#if isEditingSource}
+                    <div class="space-y-2">
+                        {#each editEntries as entry, i}
+                            <div class="flex gap-2">
+                                <Input
+                                    bind:value={entry.urlLink}
+                                    placeholder="Source URL"
+                                    class="h-8 text-sm font-mono"
+                                    disabled={isUpdatingSource}
+                                />
+                            </div>
+                        {/each}
+                        <div class="flex gap-2 mt-2">
                             <Button
                                 size="sm"
                                 variant="ghost"
-                                class="h-8 w-8 p-0 text-green-500"
+                                class="h-8 px-3 text-green-500"
                                 on:click={handleUpdateSource}
                                 disabled={isUpdatingSource ||
-                                    !newSourceUrl.trim() ||
-                                    newSourceUrl === source.sourceUrl}
+                                    editEntries.every(e => !e.urlLink.trim())}
                             >
-                                <Check class="w-4 h-4" />
+                                <Check class="w-4 h-4 mr-1" />
+                                Save
                             </Button>
                             <Button
                                 size="sm"
                                 variant="ghost"
-                                class="h-8 w-8 p-0 text-red-500"
+                                class="h-8 px-3 text-red-500"
                                 on:click={() => {
                                     isEditingSource = false;
-                                    newSourceUrl = source.sourceUrl;
+                                    editEntries = [...source.sources];
                                 }}
                                 disabled={isUpdatingSource}
                             >
-                                <X class="w-4 h-4" />
+                                <X class="w-4 h-4 mr-1" />
+                                Cancel
                             </Button>
                         </div>
-                    {:else}
-                        <a
-                            href={source.sourceUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="text-sm text-blue-400 hover:underline break-all font-mono flex items-center gap-1"
-                        >
-                            {source.sourceUrl}
-                            <ExternalLink class="w-3 h-3 flex-shrink-0" />
-                        </a>
-                        {#if source.ownerTokenId === userProfileTokenId}
-                            <button
-                                on:click={() => (isEditingSource = true)}
-                                class="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground"
-                                title="Edit source URL"
+                    </div>
+                {:else}
+                    <!-- Primary source entry -->
+                    {#if source.sources.length > 0}
+                        {@const firstEntry = source.sources[0]}
+                        <div class="flex items-center gap-2">
+                            <a
+                                href={firstEntry.urlLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="text-sm text-blue-400 hover:underline break-all font-mono flex items-center gap-1"
                             >
-                                <Pen class="w-3 h-3" />
-                            </button>
+                                {firstEntry.urlLink}
+                                <ExternalLink class="w-3 h-3 flex-shrink-0" />
+                            </a>
+                            {#if source.ownerTokenId === userProfileTokenId}
+                                <button
+                                    on:click={() => (isEditingSource = true)}
+                                    class="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground"
+                                    title="Edit source entries"
+                                >
+                                    <Pen class="w-3 h-3" />
+                                </button>
+                            {/if}
+                        </div>
+
+                        <!-- Entry metadata (content hash, format NFTs) -->
+                        {#if firstEntry.contentHash || firstEntry.contentFormatNftId || firstEntry.rawFormatNftId}
+                            <div class="mt-1 flex flex-wrap gap-2 text-xs">
+                                {#if firstEntry.contentHash}
+                                    <span class="bg-secondary/50 px-1.5 py-0.5 rounded font-mono" title="Content Hash">
+                                        🔒 {truncateId(firstEntry.contentHash, 6)}
+                                    </span>
+                                {/if}
+                                {#if firstEntry.contentFormatNftId}
+                                    <span class="bg-secondary/50 px-1.5 py-0.5 rounded font-mono" title="Content Format NFT">
+                                        📄 {truncateId(firstEntry.contentFormatNftId, 6)}
+                                    </span>
+                                {/if}
+                                {#if firstEntry.rawFormatNftId}
+                                    <span class="bg-secondary/50 px-1.5 py-0.5 rounded font-mono" title="Raw Format NFT">
+                                        📦 {truncateId(firstEntry.rawFormatNftId, 6)}
+                                    </span>
+                                {/if}
+                            </div>
                         {/if}
                     {/if}
-                </div>
+
+                    <!-- Additional entries (expandable) -->
+                    {#if hasMultipleEntries}
+                        <button
+                            on:click={() => showAllEntries = !showAllEntries}
+                            class="mt-2 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                        >
+                            {#if showAllEntries}
+                                <ChevronUp class="w-3 h-3" />
+                                Hide {source.sources.length - 1} more entries
+                            {:else}
+                                <ChevronDown class="w-3 h-3" />
+                                Show {source.sources.length - 1} more entries
+                            {/if}
+                        </button>
+
+                        {#if showAllEntries}
+                            <div class="mt-2 space-y-2 border-l-2 border-secondary pl-3">
+                                {#each source.sources.slice(1) as entry, i}
+                                    <div>
+                                        <a
+                                            href={entry.urlLink}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="text-sm text-blue-400 hover:underline break-all font-mono flex items-center gap-1"
+                                        >
+                                            {entry.urlLink}
+                                            <ExternalLink class="w-3 h-3 flex-shrink-0" />
+                                        </a>
+                                        {#if entry.contentHash || entry.contentFormatNftId || entry.rawFormatNftId}
+                                            <div class="mt-0.5 flex flex-wrap gap-1 text-xs">
+                                                {#if entry.contentHash}
+                                                    <span class="bg-secondary/50 px-1 py-0.5 rounded font-mono" title="Content Hash">
+                                                        🔒 {truncateId(entry.contentHash, 6)}
+                                                    </span>
+                                                {/if}
+                                                {#if entry.contentFormatNftId}
+                                                    <span class="bg-secondary/50 px-1 py-0.5 rounded font-mono" title="Content Format NFT">
+                                                        📄 {truncateId(entry.contentFormatNftId, 6)}
+                                                    </span>
+                                                {/if}
+                                                {#if entry.rawFormatNftId}
+                                                    <span class="bg-secondary/50 px-1 py-0.5 rounded font-mono" title="Raw Format NFT">
+                                                        📦 {truncateId(entry.rawFormatNftId, 6)}
+                                                    </span>
+                                                {/if}
+                                            </div>
+                                        {/if}
+                                    </div>
+                                {/each}
+                            </div>
+                        {/if}
+                    {/if}
+                {/if}
             </div>
 
             <!-- Voting Section -->

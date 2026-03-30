@@ -24,9 +24,14 @@ Every object is an Ergo box that follows the common reputation-proof contract.
 Represents a specific location (URL) where a file with a specific hash can be found.
 
 * **R4**: `FILE_SOURCE`
-* **R5**: `file_hash` (Blake2b256 digest). **This is the anchor.** Users search by this hash.
-* **R9**: `source_url` (The download link).
+* **R5**: `raw_file_hash` (Hash function digest). **This is the anchor.** Users search by this hash.
 * **R6**: `false` (Unlocked). If the link dies, the owner spends this box and outputs a new one with the *same* R5 (hash) but updated R9 (URL).
+* **R9**: `Coll[Coll[Byte]]` — An array of source entries, where each entry contains:
+  * `hash_function_id` — The ID of the hash function, determined by `HASH(EMPTY_INPUT)` ([spec](https://github.com/celaut-project/docs/blob/master/FAQ.md#hash-algorithm-identification))
+  * `url_link` — Link to a GET resource with the content file (old R9 value)
+  * `content_format_nft_id` — The ID of an NFT that defines the format of the file to be downloaded
+  * `content_hash` — The hash of the content stored at the URL
+  * `raw_format_nft_id` — The ID of an NFT that defines the format of the raw (uncompressed) file
 
 ## 2. SOURCE_OPINION (Item Verification)
 

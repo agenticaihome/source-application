@@ -1,5 +1,7 @@
 <script lang="ts">
     import { addFileSource } from "$lib/ergo/sourceStore";
+    import { type SourceEntry } from "$lib/ergo/sourceObject";
+    import { type ReputationProof } from "$lib/ergo/object";
     import { Button } from "$lib/components/ui/button/index.js";
     import { Input } from "$lib/components/ui/input/index.js";
     import { Label } from "$lib/components/ui/label/index.js";
@@ -7,6 +9,8 @@
     import { AlertTriangle } from "lucide-svelte";
 
     export let hasProfile = false;
+    export let profile: ReputationProof | null = null;
+    export let explorerUri: string = "";
 
     let newFileHash = "";
     let newSourceUrl = "";
@@ -19,9 +23,21 @@
         isAddingSource = true;
         addError = null;
         try {
+            // Build a simple source entry with just the URL
+            const entries: SourceEntry[] = [{
+                hashFunctionId: "",
+                contentFormatNftId: "",
+                contentHash: "",
+                rawFormatNftId: "",
+                urlLink: newSourceUrl.trim()
+            }];
+
             const tx = await addFileSource(
                 newFileHash.trim(),
-                newSourceUrl.trim(),
+                "", // hashFunctionId
+                entries,
+                profile,
+                explorerUri
             );
             console.log("Source added, tx:", tx);
             newFileHash = "";
@@ -78,7 +94,7 @@
                 id="source-url"
                 bind:value={newSourceUrl}
                 placeholder="https://example.com/file.zip or ipfs://... or magnet:..."
-                rows="2"
+                rows={2}
                 class="font-mono text-sm"
                 disabled={!hasProfile}
             />

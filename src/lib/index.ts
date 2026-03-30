@@ -28,6 +28,7 @@ export {
 
 // ===== SOURCE OBJECT TYPES & HELPERS =====
 export type {
+    SourceEntry,
     FileSource,
     InvalidFileSource,
     UnavailableSource,
@@ -44,7 +45,11 @@ export {
     groupByDownloadSource,
     groupByProfile,
     calculateProfileTrust,
-    aggregateSourceScore
+    aggregateSourceScore,
+    getPrimaryUrl,
+    getAllUrls,
+    serializeSourceEntries,
+    deserializeSourceEntries
 } from './ergo/sourceObject';
 
 // ===== COMMON TYPES =====
