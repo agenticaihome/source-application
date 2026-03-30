@@ -48,8 +48,8 @@ export {
     aggregateSourceScore,
     getPrimaryUrl,
     getAllUrls,
-    serializeSourceEntries,
-    deserializeSourceEntries
+    serializeSourceEntry,
+    deserializeSourceEntry
 } from './ergo/sourceObject';
 
 // ===== COMMON TYPES =====

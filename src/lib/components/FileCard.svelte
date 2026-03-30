@@ -102,7 +102,7 @@
         // Add unavailabilities
         for (const url in unavailableSources) {
             const unavs = unavailableSources[url]?.data || [];
-            if (sources.some((s) => s.sources.some(entry => entry.urlLink === url))) {
+            if (sources.some((s) => s.source?.urlLink === url)) {
                 for (const unav of unavs) {
                     events.push({
                         timestamp: unav.timestamp,
@@ -126,18 +126,18 @@
         addError = null;
         try {
             // Create a simple source entry with just the URL (quick add)
-            const entries: SourceEntry[] = [{
+            const entry: SourceEntry = {
                 hashFunctionId: "",
-                contentFormatNftId: "",
+                contentFormat: "",
                 contentHash: "",
-                rawFormatNftId: "",
+                rawFormat: "",
                 urlLink: newSourceUrl.trim()
-            }];
+            };
 
             const tx = await addFileSource(
                 fileHash.trim(),
                 "", // hashFunctionId
-                entries,
+                entry,
                 profile,
                 explorerUri,
             );
@@ -182,7 +182,7 @@
                 <h4 class="font-semibold mb-6 text-lg">Add First Source</h4>
 
                 <div
-                    class="text-xs text-amber-500/80 mb-6 flex gap-2 items-start"
+                    class="text-xs text-amber-800 dark:text-amber-500/80 mb-6 flex gap-2 items-start"
                 >
                     <AlertTriangle class="w-4 h-4 flex-shrink-0 mt-0.5" />
                     <p>
@@ -193,9 +193,9 @@
 
                 {#if addError}
                     <div
-                        class="bg-red-500/10 border border-red-500/20 p-3 rounded-lg mb-4"
+                        class="bg-red-500/10 border border-red-600 dark:border-red-500/20 p-3 rounded-lg mb-4"
                     >
-                        <p class="text-xs text-red-200">{addError}</p>
+                        <p class="text-xs text-red-800 dark:text-red-200">{addError}</p>
                     </div>
                 {/if}
 

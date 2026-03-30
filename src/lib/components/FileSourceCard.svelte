@@ -24,8 +24,6 @@
         X,
         Pen,
         CloudOff,
-        ChevronDown,
-        ChevronUp,
     } from "lucide-svelte";
     import * as jdenticon from "jdenticon";
 
@@ -46,7 +44,6 @@
 
     let isVoting = false;
     let voteError: string | null = null;
-    let showAllEntries = false;
 
     $: confirmationScore = confirmations.reduce(
         (sum, op) => sum + op.reputationAmount,
@@ -72,10 +69,10 @@
     );
 
     $: primaryUrl = getPrimaryUrl(source);
-    $: hasMultipleEntries = source.sources.length > 1;
+    $: sourceEntry = source.source;
 
     let isEditingSource = false;
-    let editEntries: SourceEntry[] = [...source.sources];
+    let editUrlLink = source.source?.urlLink || '';
     let isUpdatingSource = false;
 
     function getAvatarSvg(tokenId: string, size = 40): string {
@@ -99,7 +96,7 @@
             await confirmSource(
                 source.fileHash,
                 source.hashFunctionId,
-                source.sources,
+                source.source,
                 profile,
                 confirmations,
                 explorerUri,
@@ -144,15 +141,19 @@
     }
 
     async function handleUpdateSource() {
-        if (!profile || editEntries.length === 0) return;
+        if (!profile || !editUrlLink.trim()) return;
 
         isUpdatingSource = true;
         voteError = null;
         try {
+            const updatedEntry: SourceEntry = {
+                ...source.source,
+                urlLink: editUrlLink.trim(),
+            };
             await updateFileSource(
                 source.id,
                 source.fileHash,
-                editEntries,
+                updatedEntry,
                 profile,
                 explorerUri,
             );
@@ -269,32 +270,29 @@
                 </div>
             {/if}
 
-            <!-- Source Entries -->
+            <!-- Source Entry -->
             <div class="mb-3">
                 <div class="text-xs text-muted-foreground mb-1">
-                    Download Source{source.sources.length > 1 ? 's' : ''}:
+                    Download Source:
                 </div>
 
                 {#if isEditingSource}
                     <div class="space-y-2">
-                        {#each editEntries as entry, i}
-                            <div class="flex gap-2">
-                                <Input
-                                    bind:value={entry.urlLink}
-                                    placeholder="Source URL"
-                                    class="h-8 text-sm font-mono"
-                                    disabled={isUpdatingSource}
-                                />
-                            </div>
-                        {/each}
+                        <div class="flex gap-2">
+                            <Input
+                                bind:value={editUrlLink}
+                                placeholder="Source URL"
+                                class="h-8 text-sm font-mono"
+                                disabled={isUpdatingSource}
+                            />
+                        </div>
                         <div class="flex gap-2 mt-2">
                             <Button
                                 size="sm"
                                 variant="ghost"
                                 class="h-8 px-3 text-green-500"
                                 on:click={handleUpdateSource}
-                                disabled={isUpdatingSource ||
-                                    editEntries.every(e => !e.urlLink.trim())}
+                                disabled={isUpdatingSource || !editUrlLink.trim()}
                             >
                                 <Check class="w-4 h-4 mr-1" />
                                 Save
@@ -305,7 +303,7 @@
                                 class="h-8 px-3 text-red-500"
                                 on:click={() => {
                                     isEditingSource = false;
-                                    editEntries = [...source.sources];
+                                    editUrlLink = source.source?.urlLink || '';
                                 }}
                                 disabled={isUpdatingSource}
                             >
@@ -314,104 +312,47 @@
                             </Button>
                         </div>
                     </div>
-                {:else}
-                    <!-- Primary source entry -->
-                    {#if source.sources.length > 0}
-                        {@const firstEntry = source.sources[0]}
-                        <div class="flex items-center gap-2">
-                            <a
-                                href={firstEntry.urlLink}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="text-sm text-blue-400 hover:underline break-all font-mono flex items-center gap-1"
+                {:else if sourceEntry}
+                    <div class="flex items-center gap-2">
+                        <a
+                            href={sourceEntry.urlLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="text-sm text-blue-400 hover:underline break-all font-mono flex items-center gap-1"
+                        >
+                            {sourceEntry.urlLink}
+                            <ExternalLink class="w-3 h-3 flex-shrink-0" />
+                        </a>
+                        {#if source.ownerTokenId === userProfileTokenId}
+                            <button
+                                on:click={() => (isEditingSource = true)}
+                                class="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground"
+                                title="Edit source entry"
                             >
-                                {firstEntry.urlLink}
-                                <ExternalLink class="w-3 h-3 flex-shrink-0" />
-                            </a>
-                            {#if source.ownerTokenId === userProfileTokenId}
-                                <button
-                                    on:click={() => (isEditingSource = true)}
-                                    class="p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground"
-                                    title="Edit source entries"
-                                >
-                                    <Pen class="w-3 h-3" />
-                                </button>
+                                <Pen class="w-3 h-3" />
+                            </button>
+                        {/if}
+                    </div>
+
+                    <!-- Entry metadata (content hash, format) -->
+                    {#if sourceEntry.contentHash || sourceEntry.contentFormat || sourceEntry.rawFormat}
+                        <div class="mt-1 flex flex-wrap gap-2 text-xs">
+                            {#if sourceEntry.contentHash}
+                                <span class="bg-secondary/50 px-1.5 py-0.5 rounded font-mono" title="Content Hash">
+                                    🔒 {truncateId(sourceEntry.contentHash, 6)}
+                                </span>
+                            {/if}
+                            {#if sourceEntry.contentFormat}
+                                <span class="bg-secondary/50 px-1.5 py-0.5 rounded font-mono" title="Content Format">
+                                    📄 {sourceEntry.contentFormat}
+                                </span>
+                            {/if}
+                            {#if sourceEntry.rawFormat}
+                                <span class="bg-secondary/50 px-1.5 py-0.5 rounded font-mono" title="Raw Format">
+                                    📦 {sourceEntry.rawFormat}
+                                </span>
                             {/if}
                         </div>
-
-                        <!-- Entry metadata (content hash, format NFTs) -->
-                        {#if firstEntry.contentHash || firstEntry.contentFormatNftId || firstEntry.rawFormatNftId}
-                            <div class="mt-1 flex flex-wrap gap-2 text-xs">
-                                {#if firstEntry.contentHash}
-                                    <span class="bg-secondary/50 px-1.5 py-0.5 rounded font-mono" title="Content Hash">
-                                        🔒 {truncateId(firstEntry.contentHash, 6)}
-                                    </span>
-                                {/if}
-                                {#if firstEntry.contentFormatNftId}
-                                    <span class="bg-secondary/50 px-1.5 py-0.5 rounded font-mono" title="Content Format NFT">
-                                        📄 {truncateId(firstEntry.contentFormatNftId, 6)}
-                                    </span>
-                                {/if}
-                                {#if firstEntry.rawFormatNftId}
-                                    <span class="bg-secondary/50 px-1.5 py-0.5 rounded font-mono" title="Raw Format NFT">
-                                        📦 {truncateId(firstEntry.rawFormatNftId, 6)}
-                                    </span>
-                                {/if}
-                            </div>
-                        {/if}
-                    {/if}
-
-                    <!-- Additional entries (expandable) -->
-                    {#if hasMultipleEntries}
-                        <button
-                            on:click={() => showAllEntries = !showAllEntries}
-                            class="mt-2 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                        >
-                            {#if showAllEntries}
-                                <ChevronUp class="w-3 h-3" />
-                                Hide {source.sources.length - 1} more entries
-                            {:else}
-                                <ChevronDown class="w-3 h-3" />
-                                Show {source.sources.length - 1} more entries
-                            {/if}
-                        </button>
-
-                        {#if showAllEntries}
-                            <div class="mt-2 space-y-2 border-l-2 border-secondary pl-3">
-                                {#each source.sources.slice(1) as entry, i}
-                                    <div>
-                                        <a
-                                            href={entry.urlLink}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            class="text-sm text-blue-400 hover:underline break-all font-mono flex items-center gap-1"
-                                        >
-                                            {entry.urlLink}
-                                            <ExternalLink class="w-3 h-3 flex-shrink-0" />
-                                        </a>
-                                        {#if entry.contentHash || entry.contentFormatNftId || entry.rawFormatNftId}
-                                            <div class="mt-0.5 flex flex-wrap gap-1 text-xs">
-                                                {#if entry.contentHash}
-                                                    <span class="bg-secondary/50 px-1 py-0.5 rounded font-mono" title="Content Hash">
-                                                        🔒 {truncateId(entry.contentHash, 6)}
-                                                    </span>
-                                                {/if}
-                                                {#if entry.contentFormatNftId}
-                                                    <span class="bg-secondary/50 px-1 py-0.5 rounded font-mono" title="Content Format NFT">
-                                                        📄 {truncateId(entry.contentFormatNftId, 6)}
-                                                    </span>
-                                                {/if}
-                                                {#if entry.rawFormatNftId}
-                                                    <span class="bg-secondary/50 px-1 py-0.5 rounded font-mono" title="Raw Format NFT">
-                                                        📦 {truncateId(entry.rawFormatNftId, 6)}
-                                                    </span>
-                                                {/if}
-                                            </div>
-                                        {/if}
-                                    </div>
-                                {/each}
-                            </div>
-                        {/if}
                     {/if}
                 {/if}
             </div>

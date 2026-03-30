@@ -47,16 +47,16 @@
             // Build a source entry for the URL we're confirming
             const sourceEntry: SourceEntry = {
                 hashFunctionId: "",
-                contentFormatNftId: "",
+                contentFormat: "",
                 contentHash: "",
-                rawFormatNftId: "",
+                rawFormat: "",
                 urlLink: group.sourceUrl
             };
 
             await confirmSource(
                 fileHash,
                 "", // hashFunctionId
-                [sourceEntry],
+                sourceEntry,
                 reputationProof,
                 currentSources,
                 explorerUri,

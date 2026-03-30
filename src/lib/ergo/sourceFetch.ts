@@ -5,7 +5,7 @@ import {
     type ProfileData,
     type InvalidFileSource,
     type UnavailableSource,
-    deserializeSourceEntries,
+    deserializeSourceEntry,
     getPrimaryUrl
 } from './sourceObject';
 import { hexToUtf8 } from './utils';
@@ -24,7 +24,7 @@ import { getTimestampFromBlockId, searchBoxes } from 'reputation-system';
  * Parse R9 content from a box into SourceEntry[].
  * Handles both new JSON format and legacy plain URL string.
  */
-function parseR9Content(box: ApiBox): { sources: ReturnType<typeof deserializeSourceEntries> } {
+function parseR9Content(box: ApiBox): { source: ReturnType<typeof deserializeSourceEntry> } {
     let rawContent = "[Unreadable Content]";
     try {
         const rawValue = box.additionalRegisters.R9?.renderedValue;
@@ -38,7 +38,7 @@ function parseR9Content(box: ApiBox): { sources: ReturnType<typeof deserializeSo
         rawContent = "";
     }
 
-    return { sources: deserializeSourceEntries(rawContent) };
+    return { source: deserializeSourceEntry(rawContent) };
 }
 
 /**
@@ -58,16 +58,16 @@ export async function fetchFileSourcesByHash(fileHash: string, explorerUri: stri
         if (box.additionalRegisters.R6?.renderedValue !== "false") continue;
         if (!box.additionalRegisters.R9?.renderedValue) continue;
 
-        const { sources: sourceEntries } = parseR9Content(box);
+        const { source: sourceEntry } = parseR9Content(box);
 
-        // Extract hashFunctionId from the first source entry (they should all use the same hash function)
-        const hashFunctionId = sourceEntries.length > 0 ? sourceEntries[0].hashFunctionId : '';
+        // Extract hashFunctionId from the source entry
+        const hashFunctionId = sourceEntry.hashFunctionId || '';
 
         const source: FileSource = {
             id: box.boxId,
             fileHash: fileHash,
             hashFunctionId: hashFunctionId,
-            sources: sourceEntries,
+            source: sourceEntry,
             ownerTokenId: box.assets[0].tokenId,
             reputationAmount: Number(box.assets[0].amount),
             timestamp: await getTimestampFromBlockId(explorerUri, box.blockId),
@@ -196,14 +196,14 @@ export async function fetchFileSourcesByProfile(profileTokenId: string, limit: n
             console.warn(`Error decoding R5 for box ${box.boxId}`, e);
         }
 
-        const { sources: sourceEntries } = parseR9Content(box);
-        const hashFunctionId = sourceEntries.length > 0 ? sourceEntries[0].hashFunctionId : '';
+        const { source: sourceEntry } = parseR9Content(box);
+        const hashFunctionId = sourceEntry.hashFunctionId || '';
 
         const source: FileSource = {
             id: box.boxId,
             fileHash: fileHash,
             hashFunctionId: hashFunctionId,
-            sources: sourceEntries,
+            source: sourceEntry,
             ownerTokenId: box.assets[0].tokenId,
             reputationAmount: Number(box.assets[0].amount),
             timestamp: await getTimestampFromBlockId(explorerUri, box.blockId),
@@ -301,13 +301,11 @@ export async function searchByHash(fileHash: string, explorerUri: string): Promi
         const invs = await fetchInvalidFileSources(source.id, explorerUri);
         if (invs.length > 0) invalidations[source.id] = invs;
 
-        // Fetch unavailabilities for each URL in the source entries
-        for (const entry of source.sources) {
-            const url = entry.urlLink;
-            if (url && !unavailabilities[url]) {
-                const unavs = await fetchUnavailableSources(url, explorerUri);
-                if (unavs.length > 0) unavailabilities[url] = unavs;
-            }
+        // Fetch unavailabilities for the source URL
+        const url = source.source?.urlLink;
+        if (url && !unavailabilities[url]) {
+            const unavs = await fetchUnavailableSources(url, explorerUri);
+            if (unavs.length > 0) unavailabilities[url] = unavs;
         }
     }
 

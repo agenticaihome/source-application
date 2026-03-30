@@ -1,6 +1,6 @@
 import { create_profile, create_opinion, update_opinion, remove_opinion } from 'reputation-system';
 import { type RPBox, type ReputationProof } from 'reputation-system';
-import { type FileSource, type SourceEntry, serializeSourceEntries, getPrimaryUrl } from './sourceObject';
+import { type FileSource, type SourceEntry, serializeSourceEntry, getPrimaryUrl } from './sourceObject';
 import {
     FILE_SOURCE_TYPE_NFT_ID,
     INVALID_FILE_SOURCE_TYPE_NFT_ID,
@@ -49,18 +49,18 @@ export async function createProfileBox(explorerUri: string): Promise<string> {
  * 
  * @param fileHash - The raw file hash digest (R5 anchor)
  * @param hashFunctionId - ID of the hash function used (HASH(EMPTY_INPUT))
- * @param sourceEntries - Array of SourceEntry objects for R9
+ * @param sourceEntry - Single SourceEntry object for R9
  * @param proof - User's reputation proof
  * @param explorerUri - Explorer API endpoint
  */
 export async function addFileSource(
     fileHash: string,
     hashFunctionId: string,
-    sourceEntries: SourceEntry[],
+    sourceEntry: SourceEntry,
     proof: ReputationProof | null,
     explorerUri: string
 ): Promise<string> {
-    console.log("API: addFileSource", { fileHash, hashFunctionId, sourceEntries });
+    console.log("API: addFileSource", { fileHash, hashFunctionId, sourceEntry });
 
     console.log("Proof:", proof);
 
@@ -75,8 +75,8 @@ export async function addFileSource(
         throw new Error("Profile box required but not available yet. Please wait for profile creation to confirm.");
     }
 
-    // Serialize source entries as JSON for R9 content
-    const serializedContent = serializeSourceEntries(sourceEntries);
+    // Serialize single source entry as JSON for R9 content
+    const serializedContent = serializeSourceEntry(sourceEntry);
 
     const tx = await create_opinion(
         explorerUri,                // explorerUri: Explorer API endpoint
@@ -84,7 +84,7 @@ export async function addFileSource(
         FILE_SOURCE_TYPE_NFT_ID,    // type_nft_id: Type NFT for FILE_SOURCE
         fileHash,                   // object_pointer: R5 - The raw file hash
         true,                       // polarization: R8 - Positive opinion
-        serializedContent,          // content: R9 - Serialized source entries
+        serializedContent,          // content: R9 - Serialized source entry
         false,                      // is_locked: R6 - Unlocked
         mainBox                     // main_box: The profile box to split from
     );
@@ -101,18 +101,18 @@ export async function addFileSource(
  * 
  * @param oldBoxId - Box ID of the existing FILE_SOURCE to update
  * @param fileHash - The raw file hash (must match existing)
- * @param newSourceEntries - New array of SourceEntry objects for R9
+ * @param newSourceEntry - New SourceEntry object for R9
  * @param proof - User's reputation proof
  * @param explorerUri - Explorer API endpoint
  */
 export async function updateFileSource(
     oldBoxId: string,
     fileHash: string,
-    newSourceEntries: SourceEntry[],
+    newSourceEntry: SourceEntry,
     proof: ReputationProof | null,
     explorerUri: string
 ): Promise<string> {
-    console.log("API: updateFileSource", { oldBoxId, fileHash, newSourceEntries });
+    console.log("API: updateFileSource", { oldBoxId, fileHash, newSourceEntry });
 
     // Find the existing file source box to update
     const existingBox = proof?.current_boxes.find((b: RPBox) => b.box.boxId === oldBoxId) || null;
@@ -120,8 +120,8 @@ export async function updateFileSource(
         throw new Error("File source box to update not found.");
     }
 
-    // Serialize new source entries as JSON for R9 content
-    const serializedContent = serializeSourceEntries(newSourceEntries);
+    // Serialize new source entry as JSON for R9 content
+    const serializedContent = serializeSourceEntry(newSourceEntry);
 
     const tx = await update_opinion(
         explorerUri,
@@ -143,24 +143,24 @@ export async function updateFileSource(
 export async function confirmSource(
     fileHash: string,
     hashFunctionId: string,
-    sourceEntries: SourceEntry[],
+    sourceEntry: SourceEntry,
     proof: ReputationProof | null,
     currentSources: FileSource[],
     explorerUri: string
 ): Promise<string> {
-    console.log("API: confirmSource", { fileHash, sourceEntries });
+    console.log("API: confirmSource", { fileHash, sourceEntry });
 
     // Safety check: has the user already confirmed this?
     const userTokenId = proof?.token_id;
-    const primaryUrl = sourceEntries.length > 0 ? sourceEntries[0].urlLink : '';
+    const primaryUrl = sourceEntry.urlLink || '';
 
     if (userTokenId && currentSources.some(s => 
-        s.sources.some(entry => entry.urlLink === primaryUrl) && s.ownerTokenId === userTokenId
+        s.source?.urlLink === primaryUrl && s.ownerTokenId === userTokenId
     )) {
         throw new Error("You have already confirmed this source.");
     }
 
-    return await addFileSource(fileHash, hashFunctionId, sourceEntries, proof, explorerUri);
+    return await addFileSource(fileHash, hashFunctionId, sourceEntry, proof, explorerUri);
 }
 
 /**

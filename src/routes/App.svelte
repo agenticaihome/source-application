@@ -424,9 +424,9 @@
 	<div class="max-w-6xl mx-auto">
 		{#if !connected}
 			<div
-				class="bg-amber-500/10 border border-amber-500/20 p-4 rounded-lg text-center mb-6"
+				class="bg-amber-500/10 border border-amber-600 dark:border-amber-500/20 p-4 rounded-lg text-center mb-6"
 			>
-				<p class="text-amber-200">
+				<p class="text-amber-800 dark:text-amber-200">
 					Connect your wallet to use the Source Verification system
 				</p>
 			</div>
@@ -452,9 +452,9 @@
 
 		{#if addError}
 			<div
-				class="bg-red-500/10 border border-red-500/20 p-3 rounded-lg mb-4"
+				class="bg-red-500/10 border border-red-600 dark:border-red-500/20 p-3 rounded-lg mb-4"
 			>
-				<p class="text-sm text-red-200">{addError}</p>
+				<p class="text-sm text-red-800 dark:text-red-200">{addError}</p>
 			</div>
 		{/if}
 

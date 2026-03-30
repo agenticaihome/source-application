@@ -24,18 +24,18 @@
         addError = null;
         try {
             // Build a simple source entry with just the URL
-            const entries: SourceEntry[] = [{
+            const entry: SourceEntry = {
                 hashFunctionId: "",
-                contentFormatNftId: "",
+                contentFormat: "",
                 contentHash: "",
-                rawFormatNftId: "",
+                rawFormat: "",
                 urlLink: newSourceUrl.trim()
-            }];
+            };
 
             const tx = await addFileSource(
                 newFileHash.trim(),
                 "", // hashFunctionId
-                entries,
+                entry,
                 profile,
                 explorerUri
             );
@@ -55,10 +55,10 @@
     <h3 class="text-xl font-semibold mb-4">Add New File Source</h3>
 
     <div
-        class="bg-amber-500/10 border border-amber-500/20 p-3 rounded-lg mb-4 flex gap-2"
+        class="bg-amber-500/10 border border-amber-600 dark:border-amber-500/20 p-3 rounded-lg mb-4 flex gap-2"
     >
-        <AlertTriangle class="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
-        <div class="text-sm text-amber-200">
+        <AlertTriangle class="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+        <div class="text-sm text-amber-800 dark:text-amber-200">
             <strong>Security Warning:</strong> Always verify URLs before downloading.
             Malicious actors may post harmful links. The URL you provide will be
             publicly visible and immutable on the blockchain.
@@ -66,8 +66,8 @@
     </div>
 
     {#if addError}
-        <div class="bg-red-500/10 border border-red-500/20 p-3 rounded-lg mb-4">
-            <p class="text-sm text-red-200">{addError}</p>
+        <div class="bg-red-500/10 border border-red-600 dark:border-red-500/20 p-3 rounded-lg mb-4">
+            <p class="text-sm text-red-800 dark:text-red-200">{addError}</p>
         </div>
     {/if}
 

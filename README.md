@@ -26,12 +26,12 @@ Represents a specific location (URL) where a file with a specific hash can be fo
 * **R4**: `FILE_SOURCE`
 * **R5**: `raw_file_hash` (Hash function digest). **This is the anchor.** Users search by this hash.
 * **R6**: `false` (Unlocked). If the link dies, the owner spends this box and outputs a new one with the *same* R5 (hash) but updated R9 (URL).
-* **R9**: `Coll[Coll[Byte]]` — An array of source entries, where each entry contains:
+* **R9**: `Coll[Coll[Byte]]` — A single source entry (serialized as a one-element array), containing:
   * `hash_function_id` — The ID of the hash function, determined by `HASH(EMPTY_INPUT)` ([spec](https://github.com/celaut-project/docs/blob/master/FAQ.md#hash-algorithm-identification))
-  * `url_link` — Link to a GET resource with the content file (old R9 value)
-  * `content_format_nft_id` — The ID of an NFT that defines the format of the file to be downloaded
+  * `url_link` — Link to a GET resource with the content file
+  * `content_format` — The file format extension of the content (e.g. `.tar.gz`, `.zip`)
   * `content_hash` — The hash of the content stored at the URL
-  * `raw_format_nft_id` — The ID of an NFT that defines the format of the raw (uncompressed) file
+  * `raw_format` — The file format extension of the raw (uncompressed) file (e.g. `.bin`, `.raw`)
 
 ## 2. SOURCE_OPINION (Item Verification)
 

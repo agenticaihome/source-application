@@ -102,7 +102,7 @@
         // Add unavailabilities
         for (const url in unavailableSources) {
             const unavs = unavailableSources[url]?.data || [];
-            if (sources.some((s) => s.sources.some(entry => entry.urlLink === url))) {
+            if (sources.some((s) => s.source?.urlLink === url)) {
                 for (const unav of unavs) {
                     events.push({
                         timestamp: unav.timestamp,
