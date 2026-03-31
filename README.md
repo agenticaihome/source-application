@@ -146,7 +146,7 @@ https://your-app.com/?tab=add&fileHash=a1b2c3d4...&hashFunctionId=sha3_256&urlLi
 
 **Chunked file source:**
 ```
-https://your-app.com/?tab=add&fileHash=a1b2c3d4...&hashFunctionId=blake2b&urlLink=https://example.com/manifest.txt&isChunked=true&contentFormat=.bin
+https://your-app.com/?tab=add&fileHash=a1b2c3d4...&hashFunctionId=blake2b&urlLink=https://example.com/manifest&isChunked=true&contentFormat=.bin
 ```
 
 **With separate raw format (content ≠ raw):**

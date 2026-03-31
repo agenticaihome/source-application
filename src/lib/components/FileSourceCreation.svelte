@@ -464,7 +464,7 @@
                             id="url-link"
                             bind:value={entryUrlLink}
                             placeholder={isChunked
-                                ? "https://example.com/manifest.txt (each line is a chunk URL)"
+                                ? "https://example.com/manifest (each line is a chunk URL)"
                                 : "https://example.com/file.zip or ipfs://... or magnet:..."}
                             rows={2}
                             class="font-mono text-sm"

@@ -292,13 +292,18 @@ export function aggregateSourceScore(
  * Format: Coll[Coll[Byte]] — a JSON array containing one tuple (array):
  * [hash_function_id, content_format, content_hash, raw_format, url_link, is_chunked]
  * 
- * Note: The tuple mixes string and boolean types (isChunked is boolean).
- * This works because the entire JSON string is serialized to UTF-8 bytes
- * (Coll[Byte]) by the reputation-system library — the Ergo Coll[Byte]
- * encoding operates on the raw bytes of the JSON string, not individual
- * tuple elements, so mixed JS types within the tuple are fine.
+ * Serialization format: Coll[Coll[Byte]]
+ * The output represents a Coll[Coll[Byte]] structure — an array containing
+ * one tuple (inner Coll[Byte]) with the source entry fields:
+ *   [[hashFunctionId, contentFormat, contentHash, rawFormat, urlLink, isChunked]]
+ * 
+ * The reputation-system library encodes this JSON string as Coll[Byte] for R9.
+ * Since encoding operates on the raw UTF-8 bytes of the JSON string (not on
+ * individual tuple elements), mixed types (string + boolean) within the tuple
+ * are fine — JSON.parse restores original types on deserialization.
  */
 export function serializeSourceEntry(entry: SourceEntry): string {
+    // Coll[Coll[Byte]]: outer array = Coll, inner tuple = Coll[Byte] elements
     const tuple: (string | boolean)[] = [
         entry.hashFunctionId,
         entry.contentFormat,
@@ -307,7 +312,7 @@ export function serializeSourceEntry(entry: SourceEntry): string {
         entry.urlLink,
         entry.isChunked ?? false
     ];
-    return JSON.stringify([tuple]); // Coll[Coll[Byte]] — array of one tuple
+    return JSON.stringify([tuple]); // Coll[Coll[Byte]] serialized as JSON string
 }
 
 /**
