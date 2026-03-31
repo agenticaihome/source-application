@@ -26,7 +26,7 @@ Represents a specific location (URL) where a file with a specific hash can be fo
 * **R4**: `FILE_SOURCE`
 * **R5**: `raw_file_hash` (Hash function digest). **This is the anchor.** Users search by this hash.
 * **R6**: `false` (Unlocked). If the link dies, the owner spends this box and outputs a new one with the *same* R5 (hash) but updated R9 (URL).
-* **R9**: `Coll[Coll[Byte]]` — A single source entry (serialized as a one-element array), containing:
+* **R9**: `Coll[Byte]` JSON utf-8 tuple (ergoscript doesn't support this structure) — A single source entry (serialized as a one-element array), containing:
   * `hash_function_id` — The ID of the hash function, determined by `HASH(EMPTY_INPUT)` ([spec](https://github.com/celaut-project/docs/blob/master/FAQ.md#hash-algorithm-identification))
   * `url_link` — Link to a GET resource with the content file
   * `content_format` — The file format extension of the content (e.g. `.tar.gz`, `.zip`)
