@@ -154,6 +154,14 @@ https://your-app.com/?tab=add&fileHash=a1b2c3d4...&hashFunctionId=blake2b&urlLin
 https://your-app.com/?tab=add&fileHash=a1b2c3d4...&hashFunctionId=sha256&urlLink=https://example.com/file.tar.gz&contentFormat=.tar.gz&rawFormat=.bin&rawHash=e5f6a7b8...
 ```
 
+### Example URLs
+
+**Basic source link:**
+https://reputation-systems.github.io/source-application/
+
+**Pre-filled chunked source (Celaut service):**
+https://reputation-systems.github.io/source-application?tab=add&fileHash=683626b0655a2f10f4f14deabab9a158ae9ff9a5a2fa47e472efa8ac193bfea5&contentHash=84a3988e3f7e56e88b46309eba8c4f84b503cba5bec1eb8b119426b942cc0fbe&hashFunctionId=a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a&urlLink=https%3A%2F%2Fraw.githubusercontent.com%2Fanon75032-pixel%2Fdata%2Fmain%2Fuploads%2F683626b0655a2f10f4f14deabab9a158ae9ff9a5a2fa47e472efa8ac193bfea5%2Fmanifest&contentFormat=.grpcbb&isChunked=true&rawFormat=.celaut&rawHash=683626b0655a2f10f4f14deabab9a158ae9ff9a5a2fa47e472efa8ac193bfea5
+
 ### Notes
 
 - When `rawFormat` or `rawHash` is provided, the "Content is same as raw" checkbox is automatically unchecked.

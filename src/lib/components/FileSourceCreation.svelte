@@ -117,6 +117,8 @@
     $: hasValidationErrors = !!fileHashValidationError || !!contentHashValidationError;
 
     // Pre-fill form via URL parameters
+    // Reads all supported params on mount (e.g. from external tool links).
+    // URLSearchParams.get() already URL-decodes values.
     onMount(() => {
         const params = $page.url.searchParams;
         const pFileHash = params.get("fileHash");
@@ -131,26 +133,34 @@
         if (pFileHash) {
             updateHash(pFileHash);
         }
+
         if (pHashFunctionId) {
+            // Match against known hash algorithms in the dropdown
             const knownOption = HASH_OPTIONS.find(o => o.value === pHashFunctionId);
-            if (knownOption) {
+            if (knownOption && knownOption.value !== "__custom__") {
                 hashSelectValue = pHashFunctionId;
             } else {
+                // Not a known short label — treat as custom hash function ID
                 hashSelectValue = "__custom__";
                 customHashFunctionId = pHashFunctionId;
             }
+            // Also set the source entry hash function ID
+            entryHashFunctionId = pHashFunctionId;
         }
+
         if (pUrlLink) entryUrlLink = pUrlLink;
         if (pContentFormat) entryContentFormat = pContentFormat;
         if (pContentHash) entryContentHash = pContentHash;
         if (pIsChunked === "true") isChunked = true;
 
-        // If rawFormat or rawHash are provided, uncheck content=raw
+        // If rawFormat or rawHash differ from content values, uncheck content=raw
         if (pRawFormat || pRawHash) {
-            contentEqualsRaw = false;
+            const rawDiffers = (pRawFormat && pRawFormat !== pContentFormat) ||
+                               (pRawHash && pRawHash !== pContentHash);
+            if (rawDiffers || pRawFormat || pRawHash) {
+                contentEqualsRaw = false;
+            }
             if (pRawFormat) entryRawFormat = pRawFormat;
-            // rawHash is stored in entryRawFormat context — but we don't have a rawHash field separate from rawFormat
-            // The raw hash concept maps to the rawFormat field in the current data model
         }
     });
 

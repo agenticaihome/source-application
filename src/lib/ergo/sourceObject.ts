@@ -289,8 +289,14 @@ export function aggregateSourceScore(
  * Serialize source entries to a JSON string for R9 content.
  * The reputation-system library encodes this as Coll[Byte] (UTF-8 bytes).
  * 
- * Format: JSON array with one tuple, the tuple being an array of 5 strings:
- * [hash_function_id, content_format, content_hash, raw_format, url_link]
+ * Format: Coll[Coll[Byte]] — a JSON array containing one tuple (array):
+ * [hash_function_id, content_format, content_hash, raw_format, url_link, is_chunked]
+ * 
+ * Note: The tuple mixes string and boolean types (isChunked is boolean).
+ * This works because the entire JSON string is serialized to UTF-8 bytes
+ * (Coll[Byte]) by the reputation-system library — the Ergo Coll[Byte]
+ * encoding operates on the raw bytes of the JSON string, not individual
+ * tuple elements, so mixed JS types within the tuple are fine.
  */
 export function serializeSourceEntry(entry: SourceEntry): string {
     const tuple: (string | boolean)[] = [
@@ -298,18 +304,23 @@ export function serializeSourceEntry(entry: SourceEntry): string {
         entry.contentFormat,
         entry.contentHash,
         entry.rawFormat,
-        entry.urlLink
+        entry.urlLink,
+        entry.isChunked ?? false
     ];
-    // Append isChunked flag as 6th element when true
-    if (entry.isChunked) {
-        tuple.push(true);
-    }
-    return JSON.stringify([tuple]);
+    return JSON.stringify([tuple]); // Coll[Coll[Byte]] — array of one tuple
 }
 
 /**
  * Deserialize source entries from R9 content string.
- * Handles both the new JSON array format and legacy plain URL string.
+ * 
+ * Supports three formats (tried in order):
+ * 1. Coll[Coll[Byte]] tuple format: [[hashFnId, contentFmt, contentHash, rawFmt, urlLink, isChunked]]
+ * 2. Legacy JSON object format: [{ hashFunctionId, contentFormat, ... }]
+ * 3. Legacy plain URL string
+ * 
+ * Note: tuple[5] (isChunked) is a boolean while other elements are strings.
+ * This is fine because the JSON string is what gets encoded as Coll[Byte],
+ * and JSON.parse restores the original types.
  */
 export function deserializeSourceEntry(content: string): SourceEntry {
     const empty: SourceEntry = {
@@ -326,6 +337,9 @@ export function deserializeSourceEntry(content: string): SourceEntry {
         const parsed = JSON.parse(content);
         if (Array.isArray(parsed) && parsed.length > 0) {
             const tuple = parsed[0];
+
+            // Format 1: Coll[Coll[Byte]] tuple array
+            // [[hashFnId, contentFmt, contentHash, rawFmt, urlLink, isChunked?]]
             if (Array.isArray(tuple) && tuple.length >= 5) {
                 return {
                     hashFunctionId: tuple[0] || '',
@@ -336,8 +350,10 @@ export function deserializeSourceEntry(content: string): SourceEntry {
                     isChunked: tuple[5] === true
                 };
             }
-            // Handle object format as well
-            if (typeof tuple === 'object' && tuple !== null) {
+
+            // Format 2: Legacy JSON object format
+            // [{ hashFunctionId, contentFormat, contentHash, rawFormat, urlLink, isChunked }]
+            if (typeof tuple === 'object' && tuple !== null && !Array.isArray(tuple)) {
                 return {
                     hashFunctionId: tuple.hashFunctionId || '',
                     contentFormat: tuple.contentFormat || tuple.contentFormatNftId || '',
@@ -352,7 +368,7 @@ export function deserializeSourceEntry(content: string): SourceEntry {
         // Not JSON — treat as legacy plain URL string
     }
 
-    // Legacy format: R9 is just a plain URL string
+    // Format 3: Legacy plain URL string
     return {
         hashFunctionId: '',
         contentFormat: '',
