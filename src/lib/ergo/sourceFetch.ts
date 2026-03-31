@@ -4,7 +4,9 @@ import {
     type SearchResult,
     type ProfileData,
     type InvalidFileSource,
-    type UnavailableSource
+    type UnavailableSource,
+    deserializeSourceEntry,
+    getPrimaryUrl
 } from './sourceObject';
 import { hexToUtf8 } from './utils';
 import {
@@ -19,8 +21,29 @@ import { getTimestampFromBlockId, searchBoxes } from 'reputation-system';
 
 
 /**
+ * Parse R9 content from a box into SourceEntry[].
+ * Handles both new JSON format and legacy plain URL string.
+ */
+function parseR9Content(box: ApiBox): { source: ReturnType<typeof deserializeSourceEntry> } {
+    let rawContent = "[Unreadable Content]";
+    try {
+        const rawValue = box.additionalRegisters.R9?.renderedValue;
+        if (rawValue) {
+            rawContent = hexToUtf8(rawValue) ?? "[Empty Content]";
+            // Sanitize for display safety
+            rawContent = DOMPurify.sanitize(rawContent);
+        }
+    } catch (e) {
+        console.warn(`Error decoding R9 for box ${box.boxId}`, e);
+        rawContent = "";
+    }
+
+    return { source: deserializeSourceEntry(rawContent) };
+}
+
+/**
  * Fetch all FILE_SOURCE boxes for a specific file hash.
- * Returns all sources (URLs) where this file can be found.
+ * Returns all sources where this file can be found.
  */
 export async function fetchFileSourcesByHash(fileHash: string, explorerUri: string): Promise<FileSource[]> {
     console.log("Fetching file sources for hash:", fileHash);
@@ -35,22 +58,16 @@ export async function fetchFileSourcesByHash(fileHash: string, explorerUri: stri
         if (box.additionalRegisters.R6?.renderedValue !== "false") continue;
         if (!box.additionalRegisters.R9?.renderedValue) continue;
 
-        let sourceUrl = "[Unreadable URL]";
-        try {
-            const rawValue = box.additionalRegisters.R9.renderedValue;
-            if (rawValue) {
-                sourceUrl = hexToUtf8(rawValue) ?? "[Empty URL]";
-                // Sanitize URL for display
-                sourceUrl = DOMPurify.sanitize(sourceUrl);
-            }
-        } catch (e) {
-            console.warn(`Error decoding R9 for box ${box.boxId}`, e);
-        }
+        const { source: sourceEntry } = parseR9Content(box);
+
+        // Extract hashFunctionId from the source entry
+        const hashFunctionId = sourceEntry.hashFunctionId || '';
 
         const source: FileSource = {
             id: box.boxId,
             fileHash: fileHash,
-            sourceUrl: sourceUrl,
+            hashFunctionId: hashFunctionId,
+            source: sourceEntry,
             ownerTokenId: box.assets[0].tokenId,
             reputationAmount: Number(box.assets[0].amount),
             timestamp: await getTimestampFromBlockId(explorerUri, box.blockId),
@@ -179,21 +196,14 @@ export async function fetchFileSourcesByProfile(profileTokenId: string, limit: n
             console.warn(`Error decoding R5 for box ${box.boxId}`, e);
         }
 
-        let sourceUrl = "[Unreadable URL]";
-        try {
-            const rawValue = box.additionalRegisters.R9.renderedValue;
-            if (rawValue) {
-                sourceUrl = hexToUtf8(rawValue) ?? "[Empty URL]";
-                sourceUrl = DOMPurify.sanitize(sourceUrl);
-            }
-        } catch (e) {
-            console.warn(`Error decoding R9 for box ${box.boxId}`, e);
-        }
+        const { source: sourceEntry } = parseR9Content(box);
+        const hashFunctionId = sourceEntry.hashFunctionId || '';
 
         const source: FileSource = {
             id: box.boxId,
             fileHash: fileHash,
-            sourceUrl: sourceUrl,
+            hashFunctionId: hashFunctionId,
+            source: sourceEntry,
             ownerTokenId: box.assets[0].tokenId,
             reputationAmount: Number(box.assets[0].amount),
             timestamp: await getTimestampFromBlockId(explorerUri, box.blockId),
@@ -291,11 +301,11 @@ export async function searchByHash(fileHash: string, explorerUri: string): Promi
         const invs = await fetchInvalidFileSources(source.id, explorerUri);
         if (invs.length > 0) invalidations[source.id] = invs;
 
-        // Fetch unavailabilities for this URL
-        // Optimization: check if we already fetched for this URL
-        if (!unavailabilities[source.sourceUrl]) {
-            const unavs = await fetchUnavailableSources(explorerUri, source.sourceUrl);
-            if (unavs.length > 0) unavailabilities[source.sourceUrl] = unavs;
+        // Fetch unavailabilities for the source URL
+        const url = source.source?.urlLink;
+        if (url && !unavailabilities[url]) {
+            const unavs = await fetchUnavailableSources(url, explorerUri);
+            if (unavs.length > 0) unavailabilities[url] = unavs;
         }
     }
 

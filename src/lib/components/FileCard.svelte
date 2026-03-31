@@ -3,10 +3,12 @@
     import {
         groupByDownloadSource,
         groupByProfile,
+        getPrimaryUrl,
         type TimelineEvent,
         type FileSource,
         type InvalidFileSource,
         type UnavailableSource,
+        type SourceEntry,
     } from "$lib/ergo/sourceObject";
     import {
         LayoutGrid,
@@ -67,13 +69,14 @@
 
         // Add sources
         for (const source of sources) {
+            const primaryUrl = getPrimaryUrl(source);
             events.push({
                 timestamp: source.timestamp,
                 type: "FILE_SOURCE",
                 label: `New download source added`,
                 color: "#22c55e", // green-500
                 authorTokenId: source.ownerTokenId,
-                data: { sourceUrl: source.sourceUrl },
+                data: { sourceUrl: primaryUrl },
             });
         }
 
@@ -82,6 +85,7 @@
             const invs = invalidFileSources[boxId]?.data || [];
             const targetSource = sources.find((s) => s.id === boxId);
             if (targetSource) {
+                const targetPrimaryUrl = getPrimaryUrl(targetSource);
                 for (const inv of invs) {
                     events.push({
                         timestamp: inv.timestamp,
@@ -89,7 +93,7 @@
                         label: `Source marked as invalid`,
                         color: "#ef4444", // red-500
                         authorTokenId: inv.authorTokenId,
-                        data: { sourceUrl: targetSource.sourceUrl },
+                        data: { sourceUrl: targetPrimaryUrl },
                     });
                 }
             }
@@ -98,7 +102,7 @@
         // Add unavailabilities
         for (const url in unavailableSources) {
             const unavs = unavailableSources[url]?.data || [];
-            if (sources.some((s) => s.sourceUrl === url)) {
+            if (sources.some((s) => s.source?.urlLink === url)) {
                 for (const unav of unavs) {
                     events.push({
                         timestamp: unav.timestamp,
@@ -121,15 +125,24 @@
         isAddingSource = true;
         addError = null;
         try {
+            // Create a simple source entry with just the URL (quick add)
+            const entry: SourceEntry = {
+                hashFunctionId: "",
+                contentFormat: "",
+                contentHash: "",
+                rawFormat: "",
+                urlLink: newSourceUrl.trim()
+            };
+
             const tx = await addFileSource(
                 fileHash.trim(),
-                newSourceUrl.trim(),
+                "", // hashFunctionId
+                entry,
                 profile,
                 explorerUri,
             );
             console.log("Source added, tx:", tx);
             newSourceUrl = "";
-            // Ideally we should refresh or optimistic update here, but searchByHash might handle it via polling or store update
         } catch (err: any) {
             console.error("Error adding source:", err);
             addError = err?.message || "Failed to add source";
@@ -169,7 +182,7 @@
                 <h4 class="font-semibold mb-6 text-lg">Add First Source</h4>
 
                 <div
-                    class="text-xs text-amber-500/80 mb-6 flex gap-2 items-start"
+                    class="text-xs text-amber-800 dark:text-amber-500/80 mb-6 flex gap-2 items-start"
                 >
                     <AlertTriangle class="w-4 h-4 flex-shrink-0 mt-0.5" />
                     <p>
@@ -180,9 +193,9 @@
 
                 {#if addError}
                     <div
-                        class="bg-red-500/10 border border-red-500/20 p-3 rounded-lg mb-4"
+                        class="bg-red-500/10 border border-red-600 dark:border-red-500/20 p-3 rounded-lg mb-4"
                     >
-                        <p class="text-xs text-red-200">{addError}</p>
+                        <p class="text-xs text-red-800 dark:text-red-200">{addError}</p>
                     </div>
                 {/if}
 

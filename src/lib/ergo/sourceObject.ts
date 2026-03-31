@@ -6,12 +6,32 @@
  */
 
 
+// --- SOURCE ENTRY (Individual source tuple from R9) ---
+// Represents a single source entry within a FILE_SOURCE box.
+// Each entry maps to a tuple in the Coll[Coll[Byte]] structure:
+// (hash_function_id, content_format, content_hash, raw_format, url_link)
+//
+// Format fields (contentFormat, rawFormat) accept EITHER:
+//   - A simple file extension string, e.g. ".tar.gz"
+//   - A hash/box ID referencing a skill format definition
+//     (per https://github.com/celaut-project/skills)
+// The consumer determines interpretation.
+export interface SourceEntry {
+    hashFunctionId: string;       // Hash function identifier (HASH(EMPTY_INPUT))
+    contentFormat: string;        // Content file format extension (e.g. ".tar.gz") or format box ID
+    contentHash: string;          // Hash of the content at the URL
+    rawFormat: string;            // Raw (uncompressed) file format extension or format box ID
+    urlLink: string;              // The download URL
+    isChunked?: boolean;          // If true, urlLink points to a manifest of chunk URLs (default false)
+}
+
 // --- FILE_SOURCE (Box Type 1) ---
-// Represents a specific location (URL) where a file with a specific hash can be found.
+// Represents a set of download sources for a file with a specific raw hash.
 export interface FileSource {
     id: string;              // Box ID of the source
-    fileHash: string;        // R5: Blake2b256 digest (the anchor - users search by this)
-    sourceUrl: string;       // R9: Download link (URL, IPFS CID, Magnet link, etc.)
+    fileHash: string;        // R5: Raw file hash digest (the anchor - users search by this)
+    hashFunctionId: string;  // ID of hash function used (HASH(EMPTY_INPUT))
+    source: SourceEntry;    // R9: Single source entry (parsed from Coll[Coll[Byte]])
     ownerTokenId: string;    // Reputation Token ID from assets[0]
     reputationAmount: number; // Amount of reputation tokens in this box
     timestamp: number;       // Block timestamp
@@ -94,7 +114,7 @@ export interface CachedData<T> {
 export interface FileSourceWithScore extends FileSource {
     confirmations: FileSource[];      // Other FILE_SOURCE boxes with same hash and URL
     invalidations: InvalidFileSource[]; // INVALID_FILE_SOURCE boxes for this boxId
-    unavailabilities: UnavailableSource[]; // UNAVAILABLE_SOURCE boxes for this URL
+    unavailabilities: UnavailableSource[]; // UNAVAILABLE_SOURCE boxes for URLs in sources
 
     confirmationScore: number; // Sum of reputation in confirmations
     invalidationScore: number; // Sum of reputation in invalidations
@@ -110,7 +130,7 @@ export interface FileSourceWithScore extends FileSource {
  */
 export interface DownloadSourceGroup {
     sourceUrl: string;
-    sources: FileSource[]; // All FILE_SOURCE boxes for this URL
+    sources: FileSource[]; // All FILE_SOURCE boxes containing this URL
     owners: string[];      // Unique owner token IDs
     invalidations: InvalidFileSource[]; // All invalidations for all sources in this group
     unavailabilities: UnavailableSource[]; // All unavailabilities for this URL
@@ -128,7 +148,24 @@ export interface ProfileSourceGroup {
 // --- HELPER FUNCTIONS ---
 
 /**
- * Group file sources by their download URL.
+ * Get the primary URL from a FileSource.
+ * Returns the first source entry's URL, or an empty string if no sources.
+ */
+export function getPrimaryUrl(source: FileSource): string {
+    return source.source?.urlLink || '';
+}
+
+/**
+ * Get all URLs from a FileSource.
+ * With single source entry, returns an array with one URL.
+ */
+export function getAllUrls(source: FileSource): string[] {
+    return source.source?.urlLink ? [source.source.urlLink] : [];
+}
+
+/**
+ * Group file sources by their download URLs.
+ * A FileSource can contain multiple URLs; it will appear in each group.
  */
 export function groupByDownloadSource(
     sources: FileSource[],
@@ -138,24 +175,30 @@ export function groupByDownloadSource(
     const groups: Record<string, DownloadSourceGroup> = {};
 
     for (const source of sources) {
-        if (!groups[source.sourceUrl]) {
-            groups[source.sourceUrl] = {
-                sourceUrl: source.sourceUrl,
+        const url = source.source?.urlLink;
+        if (!url) continue;
+
+        if (!groups[url]) {
+            groups[url] = {
+                sourceUrl: url,
                 sources: [],
                 owners: [],
                 invalidations: [],
-                unavailabilities: unavailabilitiesMap[source.sourceUrl]?.data || []
+                unavailabilities: unavailabilitiesMap[url]?.data || []
             };
         }
 
-        groups[source.sourceUrl].sources.push(source);
-        if (!groups[source.sourceUrl].owners.includes(source.ownerTokenId)) {
-            groups[source.sourceUrl].owners.push(source.ownerTokenId);
+        // Avoid duplicating the same source in the same group
+        if (!groups[url].sources.some(s => s.id === source.id)) {
+            groups[url].sources.push(source);
+        }
+        if (!groups[url].owners.includes(source.ownerTokenId)) {
+            groups[url].owners.push(source.ownerTokenId);
         }
 
         // Add invalidations for this specific box
         const boxInvalidations = invalidationsMap[source.id]?.data || [];
-        groups[source.sourceUrl].invalidations.push(...boxInvalidations);
+        groups[url].invalidations.push(...boxInvalidations);
     }
 
     return Object.values(groups).sort((a, b) => b.sources.length - a.sources.length);
@@ -208,18 +251,19 @@ export function aggregateSourceScore(
     unavailabilities: UnavailableSource[],
     profileOpinions: ProfileOpinion[] = []
 ): FileSourceWithScore {
-    // Confirmations are other sources with same hash and URL
+    // Confirmations are other sources with same hash and same URL
+    const sourceUrl = source.source?.urlLink || '';
     const confirmations = allSources.filter(s =>
         s.id !== source.id &&
         s.fileHash === source.fileHash &&
-        s.sourceUrl === source.sourceUrl
+        s.source?.urlLink === sourceUrl
     );
 
     // Invalidations for this specific box
     const filteredInvalidations = invalidations.filter(inv => inv.targetBoxId === source.id);
 
-    // Unavailabilities for this specific URL
-    const filteredUnavailabilities = unavailabilities.filter(un => un.sourceUrl === source.sourceUrl);
+    // Unavailabilities for the URL in this source
+    const filteredUnavailabilities = unavailabilities.filter(un => un.sourceUrl === sourceUrl);
 
     const confirmationScore = confirmations.reduce((sum, s) => sum + s.reputationAmount, 0);
     const invalidationScore = filteredInvalidations.reduce((sum, inv) => sum + inv.reputationAmount, 0);
@@ -236,5 +280,106 @@ export function aggregateSourceScore(
         invalidationScore,
         unavailabilityScore,
         ownerTrustScore
+    };
+}
+
+// --- SERIALIZATION HELPERS ---
+
+/**
+ * Serialize source entries to a JSON string for R9 content.
+ * The reputation-system library encodes this as Coll[Byte] (UTF-8 bytes).
+ * 
+ * Format: Coll[Coll[Byte]] — a JSON array containing one tuple (array):
+ * [hash_function_id, content_format, content_hash, raw_format, url_link, is_chunked]
+ * 
+ * Serialization format: Coll[Coll[Byte]]
+ * The output represents a Coll[Coll[Byte]] structure — an array containing
+ * one tuple (inner Coll[Byte]) with the source entry fields:
+ *   [[hashFunctionId, contentFormat, contentHash, rawFormat, urlLink, isChunked]]
+ * 
+ * The reputation-system library encodes this JSON string as Coll[Byte] for R9.
+ * Since encoding operates on the raw UTF-8 bytes of the JSON string (not on
+ * individual tuple elements), mixed types (string + boolean) within the tuple
+ * are fine — JSON.parse restores original types on deserialization.
+ */
+export function serializeSourceEntry(entry: SourceEntry): string {
+    // Coll[Coll[Byte]]: outer array = Coll, inner tuple = Coll[Byte] elements
+    const tuple: (string | boolean)[] = [
+        entry.hashFunctionId,
+        entry.contentFormat,
+        entry.contentHash,
+        entry.rawFormat,
+        entry.urlLink,
+        entry.isChunked ?? false
+    ];
+    return JSON.stringify([tuple]); // Coll[Coll[Byte]] serialized as JSON string
+}
+
+/**
+ * Deserialize source entries from R9 content string.
+ * 
+ * Supports three formats (tried in order):
+ * 1. Coll[Coll[Byte]] tuple format: [[hashFnId, contentFmt, contentHash, rawFmt, urlLink, isChunked]]
+ * 2. Legacy JSON object format: [{ hashFunctionId, contentFormat, ... }]
+ * 3. Legacy plain URL string
+ * 
+ * Note: tuple[5] (isChunked) is a boolean while other elements are strings.
+ * This is fine because the JSON string is what gets encoded as Coll[Byte],
+ * and JSON.parse restores the original types.
+ */
+export function deserializeSourceEntry(content: string): SourceEntry {
+    const empty: SourceEntry = {
+        hashFunctionId: '',
+        contentFormat: '',
+        contentHash: '',
+        rawFormat: '',
+        urlLink: ''
+    };
+
+    if (!content || content.trim() === '') return empty;
+
+    try {
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+            const tuple = parsed[0];
+
+            // Format 1: Coll[Coll[Byte]] tuple array
+            // [[hashFnId, contentFmt, contentHash, rawFmt, urlLink, isChunked?]]
+            if (Array.isArray(tuple) && tuple.length >= 5) {
+                return {
+                    hashFunctionId: tuple[0] || '',
+                    contentFormat: tuple[1] || '',
+                    contentHash: tuple[2] || '',
+                    rawFormat: tuple[3] || '',
+                    urlLink: tuple[4] || '',
+                    isChunked: tuple[5] === true
+                };
+            }
+
+            // Format 2: Legacy JSON object format
+            // [{ hashFunctionId, contentFormat, contentHash, rawFormat, urlLink, isChunked }]
+            if (typeof tuple === 'object' && tuple !== null && !Array.isArray(tuple)) {
+                return {
+                    hashFunctionId: tuple.hashFunctionId || '',
+                    contentFormat: tuple.contentFormat || tuple.contentFormatNftId || '',
+                    contentHash: tuple.contentHash || '',
+                    rawFormat: tuple.rawFormat || tuple.rawFormatNftId || '',
+                    urlLink: tuple.urlLink || '',
+                    isChunked: tuple.isChunked === true
+                };
+            }
+        }
+    } catch {
+        // Not JSON — treat as legacy plain URL string
+    }
+
+    // Format 3: Legacy plain URL string
+    return {
+        hashFunctionId: '',
+        contentFormat: '',
+        contentHash: '',
+        rawFormat: '',
+        urlLink: content,
+        isChunked: false
     };
 }

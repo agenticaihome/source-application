@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { type DownloadSourceGroup } from "$lib/ergo/sourceObject";
+    import { type DownloadSourceGroup, type SourceEntry } from "$lib/ergo/sourceObject";
     import {
         confirmSource,
         markInvalidSource,
@@ -44,9 +44,19 @@
         isVoting = true;
         voteError = null;
         try {
+            // Build a source entry for the URL we're confirming
+            const sourceEntry: SourceEntry = {
+                hashFunctionId: "",
+                contentFormat: "",
+                contentHash: "",
+                rawFormat: "",
+                urlLink: group.sourceUrl
+            };
+
             await confirmSource(
                 fileHash,
-                group.sourceUrl,
+                "", // hashFunctionId
+                sourceEntry,
                 reputationProof,
                 currentSources,
                 explorerUri,
@@ -63,9 +73,6 @@
         isVoting = true;
         voteError = null;
         try {
-            // Mark the first source in the group as invalid (or all? User said "at download source level")
-            // Usually invalidating one is enough to flag the URL if we aggregate.
-            // But let's invalidate the first one for now.
             await markInvalidSource(
                 group.sources[0].id,
                 reputationProof,
@@ -114,8 +121,6 @@
                     <ExternalLink class="w-3 h-3 flex-shrink-0" />
                 </a>
             </div>
-
-            <!-- Global Status Badge (Optional, could be added here) -->
         </div>
 
         <!-- Contributing Profiles -->

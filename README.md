@@ -24,9 +24,14 @@ Every object is an Ergo box that follows the common reputation-proof contract.
 Represents a specific location (URL) where a file with a specific hash can be found.
 
 * **R4**: `FILE_SOURCE`
-* **R5**: `file_hash` (Blake2b256 digest). **This is the anchor.** Users search by this hash.
-* **R9**: `source_url` (The download link).
+* **R5**: `raw_file_hash` (Hash function digest). **This is the anchor.** Users search by this hash.
 * **R6**: `false` (Unlocked). If the link dies, the owner spends this box and outputs a new one with the *same* R5 (hash) but updated R9 (URL).
+* **R9**: `Coll[Coll[Byte]]` — A single source entry (serialized as a one-element array), containing:
+  * `hash_function_id` — The ID of the hash function, determined by `HASH(EMPTY_INPUT)` ([spec](https://github.com/celaut-project/docs/blob/master/FAQ.md#hash-algorithm-identification))
+  * `url_link` — Link to a GET resource with the content file
+  * `content_format` — The file format extension of the content (e.g. `.tar.gz`, `.zip`)
+  * `content_hash` — The hash of the content stored at the URL
+  * `raw_format` — The file format extension of the raw (uncompressed) file (e.g. `.bin`, `.raw`)
 
 ## 2. SOURCE_OPINION (Item Verification)
 
@@ -107,6 +112,62 @@ To determine if a Source URL is safe, the client evaluates two layers:
     * User C notices that User B is an excellent moderator who always finds bad links.
     * User C mints a `PROFILE_OPINION` pointing to User B's **Profile Token**.
     * Now, whenever User B votes on a file, User C sees that file highlighted as trusted.
+
+---
+
+## Pre-filling the Form via URL Parameters
+
+The "Add Source" form can be pre-filled using URL query parameters. This is useful for nodes or external tools that want to generate a one-click "add source" link for their users.
+
+### Supported Parameters
+
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `fileHash` | Raw file hash digest (R5 anchor) | `a1b2c3...` (64 hex chars) |
+| `hashFunctionId` | Hash algorithm ID (`sha3_256`, `blake2b`, `sha256`, `keccak256`, or custom) | `sha3_256` |
+| `urlLink` | Download URL for the file | `https://example.com/file.tar.gz` |
+| `contentFormat` | Content format (extension or format box ID) | `.tar.gz` |
+| `contentHash` | Hash of the content at the URL | `d4e5f6...` (64 hex chars) |
+| `rawFormat` | Raw format (extension or format box ID) | `.bin` |
+| `rawHash` | Raw file hash (shows separate raw fields) | `a1b2c3...` |
+| `isChunked` | Whether the URL is a chunked manifest (`true`/`false`) | `true` |
+
+### Example URLs
+
+**Basic source link:**
+```
+https://your-app.com/?tab=add&fileHash=a1b2c3d4e5f6...&hashFunctionId=blake2b&urlLink=https://example.com/file.zip
+```
+
+**Full source with content hash and format:**
+```
+https://your-app.com/?tab=add&fileHash=a1b2c3d4...&hashFunctionId=sha3_256&urlLink=https://example.com/archive.tar.gz&contentFormat=.tar.gz&contentHash=d4e5f6a7...
+```
+
+**Chunked file source:**
+```
+https://your-app.com/?tab=add&fileHash=a1b2c3d4...&hashFunctionId=blake2b&urlLink=https://example.com/manifest&isChunked=true&contentFormat=.bin
+```
+
+**With separate raw format (content ≠ raw):**
+```
+https://your-app.com/?tab=add&fileHash=a1b2c3d4...&hashFunctionId=sha256&urlLink=https://example.com/file.tar.gz&contentFormat=.tar.gz&rawFormat=.bin&rawHash=e5f6a7b8...
+```
+
+### Example URLs
+
+**Basic source link:**
+https://reputation-systems.github.io/source-application/
+
+**Pre-filled chunked source (Celaut service):**
+https://reputation-systems.github.io/source-application?tab=add&fileHash=683626b0655a2f10f4f14deabab9a158ae9ff9a5a2fa47e472efa8ac193bfea5&contentHash=84a3988e3f7e56e88b46309eba8c4f84b503cba5bec1eb8b119426b942cc0fbe&hashFunctionId=a7ffc6f8bf1ed76651c14756a061d662f580ff4de43b49fa82d80a4b80f8434a&urlLink=https%3A%2F%2Fraw.githubusercontent.com%2Fanon75032-pixel%2Fdata%2Fmain%2Fuploads%2F683626b0655a2f10f4f14deabab9a158ae9ff9a5a2fa47e472efa8ac193bfea5%2Fmanifest&contentFormat=.grpcbb&isChunked=true&rawFormat=.celaut&rawHash=683626b0655a2f10f4f14deabab9a158ae9ff9a5a2fa47e472efa8ac193bfea5
+
+### Notes
+
+- When `rawFormat` or `rawHash` is provided, the "Content is same as raw" checkbox is automatically unchecked.
+- When `isChunked=true`, the URL field label changes to "Manifest URL".
+- If `hashFunctionId` doesn't match a known algorithm, it is treated as a custom hash function.
+- Parameters are read on component mount; changes to the URL after initial load don't re-trigger pre-fill.
 
 ---
 
