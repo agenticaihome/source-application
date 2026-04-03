@@ -9,8 +9,8 @@
     import { Textarea } from "$lib/components/ui/textarea";
     import { AlertTriangle, Download, Upload, Loader2 } from "lucide-svelte";
     import { type ReputationProof } from "$lib/ergo/object";
-    import { blake2b256 } from "@fleet-sdk/crypto";
-    import { uint8ArrayToHex } from "$lib/ergo/utils";
+    import { downloadAndHash } from "$lib/ergo/hashUtils";
+
     import { type Writable } from "svelte/store";
     import { HASH_OPTIONS, validateHash } from "$lib/ergo/hashUtils";
 
@@ -175,16 +175,19 @@
         const url = entryUrlLink.trim();
         if (!url) return;
 
+        const algorithmId = entryHashFunctionId || hashFunctionId;
+        if (!algorithmId || algorithmId === '__custom__') {
+            hashError = "Cannot verify: select a known hash algorithm first";
+            return;
+        }
+
         isCalculatingHash = true;
         hashError = null;
         urlMismatch = false;
         try {
-            const response = await fetch(url);
-            if (!response.ok)
-                throw new Error(`Failed to fetch file: ${response.statusText}`);
-            const buffer = await response.arrayBuffer();
-            const bytes = new Uint8Array(buffer);
-            const hashResult = uint8ArrayToHex(blake2b256(bytes));
+            // downloadAndHash handles both chunked (manifest) and regular URLs
+            // and uses the correct hash algorithm
+            const hashResult = await downloadAndHash(url, algorithmId, isChunked);
 
             if (isHashFixed && hashResult !== currentHashValue) {
                 urlMismatch = true;
@@ -204,14 +207,22 @@
         const input = event.target as HTMLInputElement;
         if (!input.files || input.files.length === 0) return;
 
+        const algorithmId = entryHashFunctionId || hashFunctionId;
+        if (!algorithmId || algorithmId === '__custom__') {
+            hashError = "Cannot verify: select a known hash algorithm first";
+            return;
+        }
+
         const file = input.files[0];
         isCalculatingHash = true;
         hashError = null;
         try {
             const buffer = await file.arrayBuffer();
             const bytes = new Uint8Array(buffer);
-            const hashResult = blake2b256(bytes);
-            updateHash(uint8ArrayToHex(hashResult));
+            const { computeHash } = await import("$lib/ergo/hashUtils");
+            const hashResult = computeHash(bytes, algorithmId);
+            if (!hashResult) throw new Error(`Unsupported hash algorithm: ${algorithmId}`);
+            updateHash(hashResult);
         } catch (err: any) {
             console.error("Error calculating hash from file:", err);
             hashError = err?.message || "Failed to calculate hash from file";
@@ -232,17 +243,16 @@
 
         // If it's fixed, we MUST validate the URL content before adding
         if (isHashFixed && entryUrlLink.trim()) {
+            const algorithmId = entryHashFunctionId || hashFunctionId;
+            if (!algorithmId || algorithmId === '__custom__') {
+                hashError = "Cannot verify: select a known hash algorithm first";
+                return;
+            }
             isCalculatingHash = true;
             hashError = null;
             try {
-                const response = await fetch(entryUrlLink.trim());
-                if (!response.ok)
-                    throw new Error(
-                        `Failed to fetch file: ${response.statusText}`,
-                    );
-                const buffer = await response.arrayBuffer();
-                const bytes = new Uint8Array(buffer);
-                const hashResult = uint8ArrayToHex(blake2b256(bytes));
+                // Use downloadAndHash with correct algorithm + chunked support
+                const hashResult = await downloadAndHash(entryUrlLink.trim(), algorithmId, isChunked);
 
                 if (hashResult !== currentHashValue) {
                     urlMismatch = true;
