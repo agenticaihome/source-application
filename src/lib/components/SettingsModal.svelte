@@ -9,11 +9,13 @@
     export let webTx: string;
     export let webAddr: string;
     export let webTkn: string;
+    export let hashValidation: boolean = false;
     export let onSave: (settings: {
         explorerUri: string;
         webTx: string;
         webAddr: string;
         webTkn: string;
+        hashValidation: boolean;
     }) => void;
 
     // Valores por defecto definidos en constantes para fácil mantenimiento
@@ -28,6 +30,7 @@
     let localWebTx = webTx;
     let localWebAddr = webAddr;
     let localWebTkn = webTkn;
+    let localHashValidation = hashValidation;
 
     // Sync local state when props change (e.g. when modal opens)
     $: if (show) {
@@ -35,6 +38,7 @@
         localWebTx = webTx;
         localWebAddr = webAddr;
         localWebTkn = webTkn;
+        localHashValidation = hashValidation;
     }
 
     function close() {
@@ -47,6 +51,7 @@
             webTx: localWebTx,
             webAddr: localWebAddr,
             webTkn: localWebTkn,
+            hashValidation: localHashValidation,
         });
         close();
     }
@@ -57,6 +62,7 @@
         localWebTx = DEFAULTS.tx;
         localWebAddr = DEFAULTS.addr;
         localWebTkn = DEFAULTS.tkn;
+        localHashValidation = false;
     }
 </script>
 
@@ -121,6 +127,26 @@
                 <p class="text-xs text-muted-foreground">
                     URL prefix for viewing tokens.
                 </p>
+            </div>
+
+            <div class="border-t border-border pt-4 mt-4">
+                <h3 class="text-sm font-semibold mb-3">Verification</h3>
+                <div class="flex items-start gap-3">
+                    <input
+                        type="checkbox"
+                        id="hash-validation"
+                        bind:checked={localHashValidation}
+                        class="mt-1 rounded border-input"
+                    />
+                    <div>
+                        <Label for="hash-validation" class="cursor-pointer">Enable hash content validation</Label>
+                        <p class="text-xs text-muted-foreground mt-1">
+                            When enabled, adding a source will download the file from the URL
+                            and verify its hash matches before submitting the transaction.
+                            This may cause issues with large files or CORS-restricted URLs.
+                        </p>
+                    </div>
+                </div>
             </div>
         </div>
 

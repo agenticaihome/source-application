@@ -100,3 +100,12 @@ export const profileUnavailabilities = createPersistentStore<CachedData<Unavaila
 export const profileOpinionsGiven = createPersistentStore<CachedData<ProfileOpinion[]>>('source_profile_opinions_given', {});
 export const isLoading = writable<boolean>(false);
 export const error = writable<string | null>(null);
+
+// --- SETTINGS ---
+
+/**
+ * When enabled, adding a source will download the file from the URL and verify
+ * its hash matches before submitting the transaction. Disabled by default to
+ * avoid large downloads and CORS issues in the browser.
+ */
+export const hashValidationEnabled = createPersistentStore<boolean>('hash_validation_enabled', false);

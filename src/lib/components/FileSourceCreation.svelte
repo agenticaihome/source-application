@@ -21,6 +21,9 @@
     export let onSourceAdded: ((txId: string) => void) | null = null;
     export let hash: Writable<string> | undefined = undefined;
 
+    /** When false, skip automatic hash verification when adding a source. */
+    export let hashValidationEnabled: boolean = false;
+
     export let title: string = "Add New File Source";
     let className: string = "";
     export { className as class };
@@ -241,8 +244,8 @@
             newFileHash = currentHashValue;
         }
 
-        // If it's fixed, we MUST validate the URL content before adding
-        if (isHashFixed && entryUrlLink.trim()) {
+        // If hash validation is enabled and hash is fixed, validate the URL content before adding
+        if (hashValidationEnabled && isHashFixed && entryUrlLink.trim()) {
             const algorithmId = entryHashFunctionId || hashFunctionId;
             if (!algorithmId || algorithmId === '__custom__') {
                 hashError = "Cannot verify: select a known hash algorithm first";
