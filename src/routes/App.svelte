@@ -24,13 +24,15 @@
 		web_explorer_uri_tx,
 		web_explorer_uri_addr,
 		web_explorer_uri_tkn,
+		hashValidationEnabled,
 	} from "$lib/ergo/store";
-	import { PROFILE_TYPE_NFT_ID } from "$lib/ergo/envs";
+	import { PROFILE_TYPE_NFT_ID, ERGO_TREE_HASH } from "$lib/ergo/envs";
 	import { User, Settings, Search, Plus, UserPlus } from "lucide-svelte";
 	import { get, writable } from "svelte/store";
 	import SettingsModal from "$lib/components/SettingsModal.svelte";
 	import ProfileModal from "$lib/components/ProfileModal.svelte";
-	import { fetchAllUserProfiles, fetchTypeNfts } from "reputation-system";
+	import { fetchAllUserProfiles, fetchTypeNfts, convertToRPBox } from "reputation-system";
+	import type { TypeNFT, ApiBox } from "reputation-system";
 	import { createProfileBox } from "$lib/ergo/sourceStore";
 	import { searchByHash, loadProfileData } from "$lib/ergo/sourceFetch";
 	import ProfileSources from "$lib/components/ProfileSources.svelte";
@@ -154,18 +156,218 @@
 		}
 	}
 
+	/**
+	 * Decode a hex string to its UTF-8 text representation.
+	 */
+	function hexToUtf8(hex: string): string | null {
+		try {
+			if (hex.length % 2 !== 0) return null;
+			const bytes = new Uint8Array(hex.match(/.{1,2}/g)!.map(b => parseInt(b, 16)));
+			return new TextDecoder('utf-8').decode(bytes);
+		} catch { return null; }
+	}
+
+	/**
+	 * Fallback profile detection that handles the R5 encoding issue.
+	 *
+	 * The reputation-system library compares parseCollByteToHex(R5.renderedValue)
+	 * with the token ID for `is_self_defined` detection. However, profile boxes
+	 * store R5 as the UTF-8 encoding of the token ID hex string (64 ASCII bytes)
+	 * rather than the raw 32 bytes. This causes `parseCollByteToHex` to return
+	 * the hex of the ASCII representation, which doesn't match the token ID.
+	 *
+	 * This fallback directly queries the explorer API for boxes matching the
+	 * user's ErgoTree (R7), then checks both the raw hex and the UTF-8 decoded
+	 * form of R5 to find self-referencing profile boxes.
+	 */
+	async function fallbackProfileDetection(
+		explorerUri: string,
+		availableTypes: Map<string, TypeNFT>
+	): Promise<import('reputation-system').ReputationProof | null> {
+		try {
+			if (typeof ergo === 'undefined') return null;
+
+			const { ErgoAddress, SColl, SByte } = await import('@fleet-sdk/core');
+			const changeAddress = await ergo.get_change_address();
+			if (!changeAddress) return null;
+
+			const userAddress = ErgoAddress.fromBase58(changeAddress);
+
+			// Build serialized R7 and strip type prefix for rendered form
+			function hexToBytes(h: string): Uint8Array | null {
+				if (!h || !/^[0-9a-fA-F]*$/.test(h) || h.length % 2 !== 0) return null;
+				const arr = new Uint8Array(h.length / 2);
+				for (let i = 0; i < arr.length; i++) arr[i] = parseInt(h.substring(i*2, i*2+2), 16);
+				return arr;
+			}
+
+			const r7Serialized = SColl(SByte, userAddress.ergoTree).toHex();
+			// Strip Coll[Byte] prefix (0e + length byte(s))
+			const r7Rendered = r7Serialized.startsWith('0e') ? r7Serialized.substring(4) : r7Serialized;
+
+			// Also compute the R4 rendered value for PROFILE_TYPE_NFT_ID
+			const profileTypeBytes = hexToBytes(PROFILE_TYPE_NFT_ID);
+			if (!profileTypeBytes) return null;
+
+			// Query the Explorer API for boxes matching our ergo tree, R7, and R4
+			const ergo_tree_hash = ERGO_TREE_HASH;
+
+			const allBoxes: ApiBox[] = [];
+			let offset = 0;
+			const limit = 100;
+			let more = true;
+
+			while (more) {
+				const url = `${explorerUri}/api/v1/boxes/unspent/search?offset=${offset}&limit=${limit}`;
+				const body = {
+					ergoTreeTemplateHash: ergo_tree_hash,
+					registers: {
+						R4: PROFILE_TYPE_NFT_ID,
+						R7: r7Rendered,
+					},
+					assets: [],
+				};
+
+				const resp = await fetch(url, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(body),
+				});
+
+				if (!resp.ok) { more = false; continue; }
+				const data = await resp.json();
+				if (!data.items || data.items.length === 0) { more = false; continue; }
+				allBoxes.push(...data.items);
+				offset += limit;
+				if (data.items.length < limit) more = false;
+			}
+
+			if (allBoxes.length === 0) return null;
+
+			// Find profile (self-referencing) boxes
+			// Check both raw hex and UTF-8 decoded forms of R5
+			const profileBoxes = allBoxes.filter(box => {
+				if (!box.assets?.length) return false;
+				if (!box.additionalRegisters?.R5?.renderedValue) return false;
+				if (!box.additionalRegisters?.R6) return false;
+
+				// R6 must be false (unlocked)
+				const r6 = box.additionalRegisters.R6.renderedValue;
+				if (r6 !== 'false' && r6 !== false) return false;
+
+				const tokenId = box.assets[0].tokenId;
+				const r5Rendered = box.additionalRegisters.R5.renderedValue as string;
+
+				// Direct match: R5 rendered value equals token ID
+				if (r5Rendered === tokenId) return true;
+
+				// UTF-8 decode: R5 might be hex(utf8(tokenId))
+				const decoded = hexToUtf8(r5Rendered);
+				if (decoded === tokenId) return true;
+
+				return false;
+			});
+
+			if (profileBoxes.length === 0) return null;
+
+			// Group by token ID and build a ReputationProof for the first profile
+			const tokenId = profileBoxes[0].assets[0].tokenId;
+
+			// Fetch emission amount for this token
+			let totalAmount = 0;
+			try {
+				const tokenResp = await fetch(`${explorerUri}/api/v1/tokens/${tokenId}`);
+				if (tokenResp.ok) {
+					const tokenData = await tokenResp.json();
+					totalAmount = Number(tokenData.emissionAmount || 0);
+				}
+			} catch (e) {
+				console.warn('Error fetching token emission amount:', e);
+			}
+
+			// Fetch ALL boxes for this token to build complete proof
+			const allTokenBoxes: ApiBox[] = [];
+			let tokenOffset = 0;
+			let tokenMore = true;
+			while (tokenMore) {
+				const url = `${explorerUri}/api/v1/boxes/unspent/byTokenId/${tokenId}?offset=${tokenOffset}&limit=100`;
+				try {
+					const resp = await fetch(url);
+					if (!resp.ok) { tokenMore = false; continue; }
+					const data = await resp.json();
+					if (!data.items || data.items.length === 0) { tokenMore = false; continue; }
+					allTokenBoxes.push(...data.items);
+					tokenOffset += 100;
+					if (data.items.length < 100) tokenMore = false;
+				} catch { tokenMore = false; }
+			}
+
+			// Build the ReputationProof
+			const r7Val = profileBoxes[0].additionalRegisters.R7;
+			const proof: import('reputation-system').ReputationProof = {
+				token_id: tokenId,
+				types: [],
+				data: {},
+				total_amount: totalAmount,
+				owner_ergotree: (r7Val?.renderedValue as string) ?? '',
+				owner_serialized: r7Val?.serializedValue ?? '',
+				can_be_spend: true,
+				current_boxes: [],
+				number_of_boxes: 0,
+				network: 'ergo',
+			};
+
+			const uniqueTypeIds = new Set<string>();
+			for (const box of allTokenBoxes) {
+				const rpbox = convertToRPBox(box, tokenId, availableTypes);
+				if (rpbox) {
+					proof.current_boxes.push(rpbox);
+					proof.number_of_boxes += 1;
+
+					// Check if this is a self-referencing box (profile type)
+					// Handle both raw and UTF-8 encoded R5 values
+					const r5Match = rpbox.object_pointer === tokenId
+						|| hexToUtf8(rpbox.object_pointer) === tokenId;
+					if (r5Match) {
+						const typeId = rpbox.type.tokenId;
+						if (!uniqueTypeIds.has(typeId)) {
+							uniqueTypeIds.add(typeId);
+							proof.types.push(rpbox.type);
+						}
+					}
+				}
+			}
+
+			console.log('Fallback profile detection found proof:', proof);
+			return proof;
+		} catch (err) {
+			console.error('Fallback profile detection error:', err);
+			return null;
+		}
+	}
+
 	async function loadUserProfile() {
 		try {
 			const types = await fetchTypeNfts(get(explorer_uri));
+
+			// First try the library's standard profile detection
 			const proofs = await fetchAllUserProfiles(
 				get(explorer_uri),
 				true,
 				[PROFILE_TYPE_NFT_ID],
 				types,
 			);
-			const proof = proofs[0]; // TODO Select one.
+			let proof = proofs[0];
+
+			// If the library didn't find a profile, try the fallback detection
+			// which handles the R5 UTF-8 encoding edge case
+			if (!proof) {
+				console.log('Standard profile detection found nothing, trying fallback...');
+				proof = await fallbackProfileDetection(get(explorer_uri), types) ?? undefined as any;
+			}
+
 			console.log("Fetched profile proof:", proof);
-			reputation_proof.set(proof);
+			reputation_proof.set(proof ?? null);
 			console.log("Profile loaded:", proof);
 		} catch (err) {
 			console.error("Error loading profile:", err);
@@ -231,11 +433,13 @@
 		webTx: string;
 		webAddr: string;
 		webTkn: string;
+		hashValidation: boolean;
 	}) {
 		explorer_uri.set(settings.explorerUri);
 		web_explorer_uri_tx.set(settings.webTx);
 		web_explorer_uri_addr.set(settings.webAddr);
 		web_explorer_uri_tkn.set(settings.webTkn);
+		hashValidationEnabled.set(settings.hashValidation);
 	}
 
 	// --- Centralized State Actions ---
@@ -408,6 +612,7 @@
 	webTx={$web_explorer_uri_tx}
 	webAddr={$web_explorer_uri_addr}
 	webTkn={$web_explorer_uri_tkn}
+	hashValidation={$hashValidationEnabled}
 	onSave={handleSettingsSave}
 />
 
@@ -498,6 +703,7 @@
 				explorerUri={$explorer_uri}
 				{source_explorer_url}
 				hash={creationHashStore}
+				hashValidationEnabled={$hashValidationEnabled}
 			/>
 		{/if}
 	</div>

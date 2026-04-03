@@ -26,9 +26,9 @@ function getMainProfileBox(proof: ReputationProof | null): RPBox | null {
  */
 export async function createProfileBox(explorerUri: string): Promise<string> {
     const profileTxId = await create_profile(
+        explorerUri,
         PROFILE_TOTAL_SUPPLY,
         PROFILE_TYPE_NFT_ID,
-        explorerUri,
         { name: "Anon" }
     );
 

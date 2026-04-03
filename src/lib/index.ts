@@ -70,6 +70,11 @@ export {
     PROFILE_OPINION_TYPE_NFT_ID,
 } from './ergo/envs';
 
+// ===== SETTINGS STORES =====
+export {
+    hashValidationEnabled
+} from './ergo/store';
+
 // ===== SVELTE COMPONENTS =====
 export { default as ProfileCard } from './components/ProfileCard.svelte';
 export { default as FileSourceCreation } from './components/FileSourceCreation.svelte';
