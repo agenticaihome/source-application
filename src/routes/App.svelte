@@ -205,11 +205,8 @@
 			// Strip Coll[Byte] prefix (0e + length byte(s))
 			const r7Rendered = r7Serialized.startsWith('0e') ? r7Serialized.substring(4) : r7Serialized;
 
-			// Also compute the R4 rendered value for PROFILE_TYPE_NFT_ID
-			const profileTypeBytes = hexToBytes(PROFILE_TYPE_NFT_ID);
-			if (!profileTypeBytes) return null;
-
-			// Query the Explorer API for boxes matching our ergo tree, R7, and R4
+			// Query the Explorer API for boxes matching our ergo tree and R7
+			// Don't filter by R4 type — accept any profile type
 			const ergo_tree_hash = ERGO_TREE_HASH;
 
 			const allBoxes: ApiBox[] = [];
@@ -222,7 +219,6 @@
 				const body = {
 					ergoTreeTemplateHash: ergo_tree_hash,
 					registers: {
-						R4: PROFILE_TYPE_NFT_ID,
 						R7: r7Rendered,
 					},
 					assets: [],
@@ -351,10 +347,11 @@
 			const types = await fetchTypeNfts(get(explorer_uri));
 
 			// First try the library's standard profile detection
+			// Pass empty array to accept any profile type (JUDGE, PROFILE, etc.)
 			const proofs = await fetchAllUserProfiles(
 				get(explorer_uri),
 				true,
-				[PROFILE_TYPE_NFT_ID],
+				[],
 				types,
 			);
 			let proof = proofs[0];
